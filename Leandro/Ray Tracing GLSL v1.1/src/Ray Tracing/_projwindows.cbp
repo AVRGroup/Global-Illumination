@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="Path Tracing" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Build>
+			<Target title="Debug">
+				<Option output="../../bin/shaderbrick" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="../../bin" />
+				<Option object_output="../../bin/obj" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-g" />
+					<Add directory="include" />
+					<Add directory="sources" />
+				</Compiler>
+				<Linker>
+					<Add library="../../lib/libglew32.a" />
+					<Add library="../../lib/libglew32.dll.a" />
+				</Linker>
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-Wall" />
+			<Add directory="../../include" />
+		</Compiler>
+		<Linker>
+			<Add library="libglui32.a" />
+			<Add library="libfreeglut.a" />
+			<Add library="glu32" />
+			<Add library="opengl32" />
+			<Add library="libpng.a" />
+			<Add directory="../../lib" />
+		</Linker>
+		<Unit filename="GLSLShader.cpp" />
+		<Unit filename="GLSLShader.h" />
+		<Unit filename="main.cpp" />
+		<Unit filename="shaders/shader.frag" />
+		<Unit filename="shaders/shader.vert" />
+		<Unit filename="textfile.cpp" />
+		<Unit filename="textfile.h" />
+		<Extensions>
+			<code_completion />
+			<debugger />
+			<envvars />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>
