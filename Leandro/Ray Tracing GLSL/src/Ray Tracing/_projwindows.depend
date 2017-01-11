@@ -980,3 +980,39 @@
 
 1191877056 d:\faculdade\get\pesquisa\implemetações\ray tracing glsl\src\ray tracing\textfile.h
 
+1484164229 source:d:\projetos (locais)\github\global-illumination\leandro\ray tracing glsl\src\ray tracing\main.cpp
+	<stdio.h>
+	<stdlib.h>
+	<ctype.h>
+	<iostream>
+	<math.h>
+	<GL/glew.h>
+	<GL/glut.h>
+	"textfile.h"
+
+1484157207 d:\projetos (locais)\github\global-illumination\leandro\ray tracing glsl\include\gl\glew.h
+	<stddef.h>
+	<inttypes.h>
+	<stdint.h>
+	<inttypes.h>
+	<OpenGL/glu.h>
+	<GL/glu.h>
+
+1484157207 d:\projetos (locais)\github\global-illumination\leandro\ray tracing glsl\include\gl\glut.h
+	"freeglut_std.h"
+
+1484157207 d:\projetos (locais)\github\global-illumination\leandro\ray tracing glsl\include\gl\freeglut_std.h
+	<windows.h>
+	<OpenGL/gl.h>
+	<OpenGL/glu.h>
+	<GL/gl.h>
+	<GL/glu.h>
+	<stdlib.h>
+
+1484157207 d:\projetos (locais)\github\global-illumination\leandro\ray tracing glsl\src\ray tracing\textfile.h
+
+1484157207 source:d:\projetos (locais)\github\global-illumination\leandro\ray tracing glsl\src\ray tracing\textfile.cpp
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+
