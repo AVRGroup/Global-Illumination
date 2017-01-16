@@ -42,19 +42,19 @@ struct HitRecord
 // VARIAVEIS
 
 // Uniforms
-//uniform float width;
-//uniform float height;
-//uniform float addBallX;
-//uniform float addBallY;
-//uniform float addBallZ;
-//uniform int samplesAA;
+uniform float width;
+uniform float height;
+uniform float addBallX;
+uniform float addBallY;
+uniform float addBallZ;
+uniform int samplesAA;
 
-float width = 800;
-float height = 600;
-float addBallX = 0;
-float addBallY = 0;
-float addBallZ = 5;
-int samplesAA = 16;
+//float width = 800;
+//float height = 600;
+//float addBallX = 0;
+//float addBallY = 0;
+//float addBallZ = 5;
+//int samplesAA = 16;
 
 // Parametros
 int blurAA = 1;

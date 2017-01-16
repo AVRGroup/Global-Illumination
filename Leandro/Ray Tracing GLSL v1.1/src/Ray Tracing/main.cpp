@@ -11,7 +11,7 @@ using namespace std;
 
 //screen size
 int WIDTH = 800;
-int HEIGHT = 600;
+int HEIGHT = 400;
 
 float d = 0.1;
 float addBallX = 0;
@@ -19,9 +19,9 @@ float addBallY = 0;
 float addBallZ = 0;
 int samplesAA = 0;
 int maxSamples = 32;
-float theta = 0;
-float fi = 0;
-float r = 1;
+float theta = 1.5;
+float fi = 5.5;
+float r = 3;
 
 //shader reference
 GLSLShader shader;
@@ -54,6 +54,11 @@ void OnInit()
 	SetGeometry();
 
 	cout << "Initialization successfull" << endl;
+	cout << "------------------------------------------------------" << endl;
+	cout << "Controles" << endl;
+	cout << "------------------------------------------------------" << endl;
+	cout << "Rotacionar camera: setas" << endl;
+	cout << "Zoom camera: PgUp e PgDn" << endl;
 }
 
 
