@@ -22,9 +22,12 @@ Para que se possa construir a SVO, primeiramente é necessário obter o arquivo 
 
 **Sintaxe:** tri_convert -f (caminho para o arquivo do modelo)
 
-**Examplo:** 
+**Exemplo**
 ```
 ./tri_convert -f ../Bunny/bunny.ply
+```
+```
+tri_convert.exe -f ../Bunny/bunny.ply
 ```
 Isso irá gerar um bunny.tri + bunny.tridata no mesmo diretório.
 
@@ -45,12 +48,18 @@ O svo_builder pega um arquivo .tri como entrada e realiza três passos (particio
  * **fixed** :  Cores fixas dos voxels, configurável no código fonte.
 * **-v** Para que seja bastante verbose.
 
-**Examplos**
-````
+**Exemplos**
+```
 ./svo_builder -f bunny.tri
-````
+```
+```
+svo_builder.exe -f bunny.tri
+```
 Isso irá gerar um arquivo bunny.octree. Como default, utilizará um grid de dimesão 1024^3, com 2048 Mb de memória do sistema.
-````
+```
 ./svo_builder -f bunny.tri -s 2048 -l 1024 -d 0.2 -c normal -v
-````
+```
+```
+svo_builder.exe -f bunny.tri -s 2048 -l 1024 -d 0.2 -c normal -v
+```
 Isso irá gerar um arquivo bunny.octree. Como default, utilizará um grid de dimesão 2048^3, com 2048 Mb de memória do sistema, com 20% de speedup de memória adicional. As cores dos voxels serão derivados das normais.
