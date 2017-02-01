@@ -27,3 +27,13 @@
 
 # log files
 *.buildlog.txt
+
+*.VC.db
+*VC.opendb
+
+*.iobj
+*.ipdb
+*.pdb
+
+PetTracer/obj/
+!PetTracer.exe
