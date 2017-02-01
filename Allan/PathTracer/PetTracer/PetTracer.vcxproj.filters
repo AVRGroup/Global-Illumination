@@ -1,0 +1,91 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Header Files\math">
+      <UniqueIdentifier>{b3f42cb9-0a67-4228-b856-040c86f96f7a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\kernels">
+      <UniqueIdentifier>{7aebc692-ef86-4377-9f6f-cd51d8d057c4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\kernels\CL">
+      <UniqueIdentifier>{18084b54-943b-4f76-a487-c0e06bb57553}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\ext">
+      <UniqueIdentifier>{e933e7e3-94eb-4e82-8925-a2a4f8dbf5a6}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\Camera.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\PetTracer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Renderer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ext\glad.c">
+      <Filter>Source Files\ext</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ext\tiny_obj_loader.cpp">
+      <Filter>Source Files\ext</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="src\kernels\CL\camera.cl">
+      <Filter>Source Files\kernels\CL</Filter>
+    </None>
+    <None Include="src\kernels\CL\integrator_pt.cl">
+      <Filter>Source Files\kernels\CL</Filter>
+    </None>
+    <None Include="src\kernels\CL\opencl_kernel.cl">
+      <Filter>Source Files\kernels\CL</Filter>
+    </None>
+    <None Include="src\kernels\CL\path.cl">
+      <Filter>Source Files\kernels\CL</Filter>
+    </None>
+    <None Include="src\kernels\CL\primitives.cl">
+      <Filter>Source Files\kernels\CL</Filter>
+    </None>
+    <None Include="src\kernels\CL\random.cl">
+      <Filter>Source Files\kernels\CL</Filter>
+    </None>
+    <None Include="src\kernels\CL\tracer.cl">
+      <Filter>Source Files\kernels\CL</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\Camera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Renderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\TracerTypes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\math\MathUtils.h">
+      <Filter>Header Files\math</Filter>
+    </ClInclude>
+    <ClInclude Include="include\math\float3.h">
+      <Filter>Header Files\math</Filter>
+    </ClInclude>
+    <ClInclude Include="include\math\float2.h">
+      <Filter>Header Files\math</Filter>
+    </ClInclude>
+    <ClInclude Include="include\math\quaternion.h">
+      <Filter>Header Files\math</Filter>
+    </ClInclude>
+    <ClInclude Include="include\math\matrix.h">
+      <Filter>Header Files\math</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
