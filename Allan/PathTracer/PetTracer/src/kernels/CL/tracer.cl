@@ -3,7 +3,7 @@
 #include <random.cl>
 
 
-void IntersectSceneClosest( __constant Sphere* scene, const int sphereCount, Ray* r, Intersection* isect )
+void IntersectSceneClosest( __global Sphere* scene, const int sphereCount, Ray* r, Intersection* isect )
 {
 	isect->shapeID = -1;
 	isect->primID = -1;
@@ -25,7 +25,7 @@ void IntersectSceneClosest( __constant Sphere* scene, const int sphereCount, Ray
 __kernel
 void IntersectClosest(
 				// Scene description
-				__constant Sphere* spheres,
+				__global Sphere* spheres,
 				const int sphereCount,
 				// Rays input
 				__global Ray* rays,

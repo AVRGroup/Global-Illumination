@@ -23,7 +23,7 @@ Ray CreateCamRay(const int x_coord, const int y_coord, const int width, const in
 	return ray;
 }
 
-bool intersectScene(__constant Sphere* spheres, __constant float4* triangles, const Ray* ray, float* t, int* sphereID, const int sphereCount, unsigned int triangleCount, DifferentialGeometry* difGeo)
+bool intersectScene( __global Sphere* spheres, __global float4* triangles, const Ray* ray, float* t, int* sphereID, const int sphereCount, unsigned int triangleCount, DifferentialGeometry* difGeo)
 {
 	Intersection intersect;
 	intersect.uvwt = (float4)(0.0f, 0.0f, 0.0f, INFINITY );
@@ -83,7 +83,7 @@ bool intersectScene(__constant Sphere* spheres, __constant float4* triangles, co
 	return *t < INFINITY;
 }
 
-float3 trace(__constant Sphere* spheres, __constant float4* triangles, __global Ray* camray, const int sphereCount, unsigned int triangleCount, unsigned int* seed0, unsigned int* seed1)
+float3 trace(__global Sphere* spheres, __global float4* triangles, __global Ray* camray, const int sphereCount, unsigned int triangleCount, unsigned int* seed0, unsigned int* seed1)
 {
 	Ray ray = *camray;
 
@@ -142,9 +142,9 @@ float3 trace(__constant Sphere* spheres, __constant float4* triangles, __global 
 
 union Colour { float c; uchar4 components; };
 
-__kernel void render_kernel( __constant Sphere* spheres, const int width, const int height, const int sphereCount, __global float3* output,
+__kernel void render_kernel( __global Sphere* spheres, const int width, const int height, const int sphereCount, __global float3* output,
 							 const int seedt, const int iteration, __global Ray* rays, float random0, float random1, __global float3* accumColor,
-							 __constant float4* triangles, unsigned int trianglesCount)
+							 __global float4* triangles, unsigned int trianglesCount)
 {
 	const int workItemID = get_global_id( 0 );
 	int x_coord = workItemID % width;

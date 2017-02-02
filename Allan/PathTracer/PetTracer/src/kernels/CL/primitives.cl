@@ -15,7 +15,7 @@ typedef struct Sphere
 	float4 emission;
 } Sphere;
 
-float IntersectSphere( __constant Sphere* sphere, const Ray* ray )
+float IntersectSphere( __global Sphere* sphere, const Ray* ray )
 {
 	float3 rayToCenter = sphere->pos.xyz - ray->o.xyz;
 
@@ -34,7 +34,7 @@ float IntersectSphere( __constant Sphere* sphere, const Ray* ray )
 	return 0.0f;
 }
 
-int IntersectSphereI( __constant Sphere* sphere, const Ray* ray, Intersection* intersec )
+int IntersectSphereI( __global Sphere* sphere, const Ray* ray, Intersection* intersec )
 {
 	float3 rayToCenter = sphere->pos.xyz - ray->o.xyz;
 
