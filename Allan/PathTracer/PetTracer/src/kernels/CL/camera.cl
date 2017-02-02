@@ -1,4 +1,4 @@
-﻿#ifndef CAMERA_CL
+#ifndef CAMERA_CL
 #define CAMERA_CL
 
 #include <path.cl>

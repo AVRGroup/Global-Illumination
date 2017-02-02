@@ -88,7 +88,7 @@ namespace PetTracer
 			mOpenCLKernel.setArg( 8, rand() / RAND_MAX );
 			mOpenCLKernel.setArg( 9, rand() / RAND_MAX );
 
-			mKPerspectiveCamera.setArg( 0, rand() );
+			//mKPerspectiveCamera.setArg( 0, rand() );
 			
 			if(mTrace)RunKernel();
 
