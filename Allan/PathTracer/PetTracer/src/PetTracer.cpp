@@ -29,7 +29,9 @@ namespace PetTracer
 		CRenderer(std::string title, unsigned int width, unsigned int height)
 			: Renderer(title, width, height),
 			  mPerpectiveCamera(float3( 0.0f, 0.0f, 2.0f ), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 1.0f, 0.0f))
-		{ }
+		{
+			pattern = new float3[mScreenHeight*mScreenWidth];
+		}
 
 	protected:
 		bool Initialize() override
@@ -49,7 +51,9 @@ namespace PetTracer
 			mCamera = cl::Buffer( mOpenCLContext, CL_MEM_READ_ONLY, sizeof( Camera ) );
 			mQueue.enqueueWriteBuffer( mCamera, CL_TRUE, 0, sizeof( Camera ), &mPerpectiveCamera );
 			mQueue.enqueueWriteBuffer( mSpheresBuffer, CL_TRUE, 0, mNumSpheres * sizeof( Sphere ), mCPUSpheres );
-			mQueue.enqueueFillBuffer( mAccumBuffer, 0, 0, mScreenHeight*mScreenWidth * sizeof( cl_float3 ) );
+			mQueue.enqueueWriteBuffer( mAccumBuffer, CL_TRUE, 0, mScreenHeight*mScreenWidth * sizeof( float3 ), pattern );
+			//clEnqueueFillBuffer( mQueue(), mAccumBuffer(), &pattern, sizeof( pattern ), 0, mScreenHeight*mScreenWidth * sizeof( cl_float3 ), 0, NULL, NULL );
+			//mQueue.enqueueFillBuffer<unsigned char>( mAccumBuffer, 0, 0, mScreenHeight*mScreenWidth * sizeof( cl_float3 ) );
 			if ( mNumTriangles > 0 )
 			{
 				mTriangleBuffer = cl::Buffer( mOpenCLContext, CL_MEM_READ_ONLY, mNumTriangles * 3 * sizeof( float3 ) );
@@ -88,7 +92,6 @@ namespace PetTracer
 			mOpenCLKernel.setArg( 8, rand() / RAND_MAX );
 			mOpenCLKernel.setArg( 9, rand() / RAND_MAX );
 
-			//mKPerspectiveCamera.setArg( 0, rand() );
 			
 			if(mTrace)RunKernel();
 
@@ -112,7 +115,10 @@ namespace PetTracer
 
 		void OnShutdow() override
 		{
+			glFinish();
+			mQueue.finish();
 			glDeleteBuffers( 1, &mVertexBufferObject );
+			delete[ ] pattern;
 		}
 
 		void KeyDown( SDL_Keycode const& key )
@@ -200,7 +206,9 @@ namespace PetTracer
 			// Wait for any work to finish
 			mQueue.finish();
 			// Fill the accumulation buffer with 0s
-			mQueue.enqueueFillBuffer( mAccumBuffer, 0, 0, mScreenWidth*mScreenHeight * sizeof( cl_float3 ) );
+			mQueue.enqueueWriteBuffer( mAccumBuffer, CL_TRUE, 0, mScreenHeight*mScreenWidth * sizeof( float3 ), pattern );
+			//clEnqueueFillBuffer( mQueue(), mAccumBuffer(), &pattern, sizeof( pattern ), 0, mScreenHeight*mScreenWidth * sizeof( cl_float3 ), 0, NULL, NULL );
+			//mQueue.enqueueFillBuffer( mAccumBuffer, 0, 0, mScreenWidth*mScreenHeight * sizeof( cl_float3 ) );
 			mQueue.finish();
 			mResetRender = true;
 		}
@@ -501,6 +509,7 @@ namespace PetTracer
 
 		unsigned int mNumTriangles;
 		float3 *mSceneData = NULL;
+		float3 *pattern = NULL;
 
 		static const int mNumSpheres = 9;
 		Sphere mCPUSpheres[mNumSpheres];
