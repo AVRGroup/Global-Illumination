@@ -12,13 +12,13 @@ enum Refl_t { DIFF, SPEC, REFR };
 
 struct Sphere
 {
-	float radius;
-	Refl_t reflectionType;
-	float dummy2;
-	float dummy3;
-	cl_float3 position;
-	cl_float3 color;
-	cl_float3 emission;
+	cl_float radius;
+	cl_int reflectionType;
+	cl_float dummy2;
+	cl_float dummy3;
+	cl_float4 position;
+	cl_float4 color;
+	cl_float4 emission;
 };
 
 namespace PetTracer

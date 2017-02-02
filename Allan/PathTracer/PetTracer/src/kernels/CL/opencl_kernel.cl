@@ -67,7 +67,7 @@ bool intersectScene(__constant Sphere* spheres, __constant float4* triangles, co
 	switch ( shapeType )
 	{
 	case 1:
-		difGeo->n = normalize( difGeo->p - spheres[*sphereID].pos );
+		difGeo->n = normalize( difGeo->p - spheres[*sphereID].pos.xyz );
 		break;
 	case 2:
 		difGeo->n = normalize( cross( triangles[*sphereID * 3 + 1].xyz, triangles[*sphereID * 3 + 2].xyz ) );
@@ -131,8 +131,8 @@ float3 trace(__constant Sphere* spheres, __constant float4* triangles, __global 
 		ray.d = (float4)(newDir, 0.0f);
 
 		accumDist += t;
-		accumColor += mask * (hitSphere.emission / accumDist*accumDist );
-		mask *= hitSphere.color;
+		accumColor += mask * (hitSphere.emission.xyz / accumDist*accumDist );
+		mask *= hitSphere.color.xyz;
 
 		mask *= dot( newDir, normalFacing );
 	}

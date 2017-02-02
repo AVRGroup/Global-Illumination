@@ -10,14 +10,14 @@ typedef struct Sphere
 	uint  flt;
 	float padding0;
 	float padding1;
-	float3 pos;
-	float3 color;
-	float3 emission;
+	float4 pos;
+	float4 color;
+	float4 emission;
 } Sphere;
 
 float IntersectSphere( __constant Sphere* sphere, const Ray* ray )
 {
-	float3 rayToCenter = sphere->pos - ray->o.xyz;
+	float3 rayToCenter = sphere->pos.xyz - ray->o.xyz;
 
 	float b = dot( rayToCenter, ray->d.xyz );
 	float c = dot( rayToCenter, rayToCenter ) - sphere->radius*sphere->radius;
@@ -36,7 +36,7 @@ float IntersectSphere( __constant Sphere* sphere, const Ray* ray )
 
 int IntersectSphereI( __constant Sphere* sphere, const Ray* ray, Intersection* intersec )
 {
-	float3 rayToCenter = sphere->pos - ray->o.xyz;
+	float3 rayToCenter = sphere->pos.xyz - ray->o.xyz;
 
 	float b = dot( rayToCenter, ray->d.xyz );
 	float c = dot( rayToCenter, rayToCenter ) - sphere->radius*sphere->radius;
