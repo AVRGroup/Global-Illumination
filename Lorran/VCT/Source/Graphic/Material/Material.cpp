@@ -4,7 +4,7 @@
 #include <fstream>
 #include <vector>
 
-#include <glm/gtc/type_ptr.hpp>
+#include "../Include/glm/gtc/type_ptr.hpp"
 
 #include "Shader.h"
 

@@ -1,9 +1,9 @@
 #include "GlassScene.h"
 
 #define GLEW_STATIC
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-#include <glm/gtx/rotate_vector.hpp>
+#include "../Include/GL/glew.h"
+#include "../Include/GLFW/glfw3.h"
+#include "../Include/glm/gtx/rotate_vector.hpp"
 
 #include "../../Graphic/Lighting/PointLight.h"
 #include "../../Time/Time.h"

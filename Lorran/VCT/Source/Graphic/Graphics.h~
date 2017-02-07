@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <vector>
 
 #define GLEW_STATIC
@@ -35,6 +36,14 @@ public:
 	);
 
 	// ----------------
+	// Rendering.
+	// ----------------
+	bool shadows = true;
+	bool indirectDiffuseLight = true;
+	bool indirectSpecularLight = true;
+	bool directLight = true;
+
+	// ----------------
 	// Voxelization.
 	// ----------------
 	bool automaticallyRegenerateMipmap = true;
@@ -59,6 +68,8 @@ private:
 	// ----------------
 	// Rendering.
 	// ----------------
+	void initRendering();
+	void renderScene(Scene & renderingScene, unsigned int viewportWidth, unsigned int viewportHeight);
 	void renderQueue(RenderingQueue renderingQueue, const GLuint program, bool uploadMaterialSettings = false) const;
 	void uploadGlobalConstants(const GLuint program, unsigned int viewportWidth, unsigned int viewportHeight) const;
 	void uploadCamera(Camera & camera, const GLuint program);
@@ -66,10 +77,15 @@ private:
 	void uploadRenderingSettings(const GLuint glProgram) const;
 
 	// ----------------
+	// Voxel cone tracing.
+	// ----------------
+	Material * voxelConeTracingMaterial;
+
+	// ----------------
 	// Voxelization.
 	// ----------------
 	int ticksSinceLastVoxelization = voxelizationSparsity;
-	GLuint voxelTextureSize = 64; // Must be set to a power of 2.
+	GLuint voxelTextureSize = 128; // Must be set to a power of 2.
 	OrthographicCamera voxelCamera;
 	Material * voxelizationMaterial;
 	Texture3D * voxelTexture = nullptr;

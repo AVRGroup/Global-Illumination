@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glm/glm.hpp>
+#include "../Include/glm/glm.hpp"
 
 /// <summary> Contains information about vertices such as position, normal, texture coordinate and color. </summary>
 class VertexData {

@@ -6,9 +6,9 @@
 #include <unordered_map>
 
 #define GLEW_STATIC
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
+#include "../Include/GL/glew.h"
+#include "../Include/GLFW/glfw3.h"
+#include "../Include/glm/glm.hpp"
 
 class Shader;
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #define GLEW_STATIC
-#include <GL/glew.h>
+#include "../Include/GL/glew.h"
 
 #include <iostream>
 #include <vector>

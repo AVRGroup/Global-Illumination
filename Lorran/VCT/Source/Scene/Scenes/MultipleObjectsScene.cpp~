@@ -1,9 +1,8 @@
 #include "MultipleObjectsScene.h"
 
 #define GLEW_STATIC
-#include <GL/glew.h>
-//#include <GLFW/glfw3.h>
-#include "../../../Include/GLFW/glfw3.h"
+#include "../Include/GL/glew.h"
+#include "../Include/GLFW/glfw3.h"
 #include <glm/gtx/rotate_vector.hpp>
 
 #include "../../Graphic/Lighting/PointLight.h"
@@ -21,7 +20,7 @@ void MultipleObjectsScene::init(unsigned int viewportWidth, unsigned int viewpor
 	FirstPersonScene::init(viewportWidth, viewportHeight);
 
 	// Cornell box.
-	Shape * cornell = ObjLoader::loadObjFile("Assets\\Models\\cornell.obj");
+	Shape * cornell = ObjLoader::loadObjFile("Assets/Models/cornell.obj");
 	shapes.push_back(cornell);
 	for (unsigned int i = 0; i < cornell->meshes.size(); ++i) {
 		renderers.push_back(new MeshRenderer(&(cornell->meshes[i])));
@@ -44,7 +43,7 @@ void MultipleObjectsScene::init(unsigned int viewportWidth, unsigned int viewpor
 
 	// Susanne.
 	int objectIndex = renderers.size();
-	Shape * object = ObjLoader::loadObjFile("Assets\\Models\\susanne.obj");
+	Shape * object = ObjLoader::loadObjFile("Assets/Models/susanne.obj");
 	shapes.push_back(object);
 	for (unsigned int i = 0; i < object->meshes.size(); ++i) {
 		renderers.push_back(new MeshRenderer(&(object->meshes[i])));
@@ -68,7 +67,7 @@ void MultipleObjectsScene::init(unsigned int viewportWidth, unsigned int viewpor
 
 	// Dragon.
 	objectIndex = renderers.size();
-	object = ObjLoader::loadObjFile("Assets\\Models\\dragon.obj");
+	object = ObjLoader::loadObjFile("Assets/Models/dragon.obj");
 	shapes.push_back(object);
 	for (unsigned int i = 0; i < object->meshes.size(); ++i) {
 		renderers.push_back(new MeshRenderer(&(object->meshes[i])));
@@ -91,7 +90,7 @@ void MultipleObjectsScene::init(unsigned int viewportWidth, unsigned int viewpor
 
 	// Bunny.
 	objectIndex = renderers.size();
-	object = ObjLoader::loadObjFile("Assets\\Models\\bunny.obj");
+	object = ObjLoader::loadObjFile("Assets/Models/bunny.obj");
 	shapes.push_back(object);
 	for (unsigned int i = 0; i < object->meshes.size(); ++i) {
 		renderers.push_back(new MeshRenderer(&(object->meshes[i])));
@@ -114,7 +113,7 @@ void MultipleObjectsScene::init(unsigned int viewportWidth, unsigned int viewpor
 
 	// Light.
 	int lightIndex = renderers.size();
-	Shape * light = ObjLoader::loadObjFile("Assets\\Models\\quad.obj");
+	Shape * light = ObjLoader::loadObjFile("Assets/Models/quad.obj");
 	shapes.push_back(light);
 	MeshRenderer * lamp = new MeshRenderer(&(light->meshes[0]));
 	renderers.push_back(lamp);

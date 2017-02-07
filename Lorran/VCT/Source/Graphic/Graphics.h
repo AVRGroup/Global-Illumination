@@ -4,8 +4,8 @@
 #include <vector>
 
 #define GLEW_STATIC
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
+#include "../Include/GL/glew.h"
+#include "../Include/GLFW/glfw3.h"
 
 #include "../Scene/Scene.h"
 #include "Material/Material.h"
@@ -85,7 +85,7 @@ private:
 	// Voxelization.
 	// ----------------
 	int ticksSinceLastVoxelization = voxelizationSparsity;
-	GLuint voxelTextureSize = 32; // Must be set to a power of 2.
+	GLuint voxelTextureSize = 128; // Must be set to a power of 2.
 	OrthographicCamera voxelCamera;
 	Material * voxelizationMaterial;
 	Texture3D * voxelTexture = nullptr;

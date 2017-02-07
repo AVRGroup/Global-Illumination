@@ -3,11 +3,11 @@
 #include <iostream>
 #include <vector>
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtx/transform.hpp>
-#include <glm/mat4x4.hpp>
-#include <glm/gtc/quaternion.hpp>
+#include "../Include/glm/glm.hpp"
+#include "../Include/glm/gtc/matrix_transform.hpp"
+#include "../Include/glm/gtx/transform.hpp"
+#include "../Include/glm/mat4x4.hpp"
+#include "../Include/glm/gtc/quaternion.hpp"
 
 /// <summary> Represents a transform: rotation, position and scale. </summary>
 class Transform {

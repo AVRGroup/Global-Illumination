@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include <glm/glm.hpp>
+#include "../Include/glm/glm.hpp"
 
 #include "../Graphic/Lighting/PointLight.h"
 #include "../Graphic/Camera/Camera.h"

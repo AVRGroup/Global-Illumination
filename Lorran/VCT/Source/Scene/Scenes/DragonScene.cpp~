@@ -1,9 +1,9 @@
 #include "DragonScene.h"
 
 #define GLEW_STATIC
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-#include <gtx/rotate_vector.hpp>
+#include "../Include/GL/glew.h"
+#include "../Include/GLFW/glfw3.h"
+#include <glm/gtx/rotate_vector.hpp>
 
 #include "../../Graphic/Lighting/PointLight.h"
 #include "../../Graphic/Camera/Camera.h"
@@ -20,7 +20,7 @@ void DragonScene::init(unsigned int viewportWidth, unsigned int viewportHeight) 
 	FirstPersonScene::init(viewportWidth, viewportHeight);
 
 	// Cornell box.
-	Shape * cornell = ObjLoader::loadObjFile("Assets\\Models\\cornell.obj");
+	Shape * cornell = ObjLoader::loadObjFile("Assets/Models/cornell.obj");
 	shapes.push_back(cornell);
 	for (unsigned int i = 0; i < cornell->meshes.size(); ++i) renderers.push_back(new MeshRenderer(&(cornell->meshes[i])));
 	for (auto & r : renderers) {
@@ -41,7 +41,7 @@ void DragonScene::init(unsigned int viewportWidth, unsigned int viewportHeight) 
 
 	// Dragon.
 	int dragonIndex = renderers.size();
-	Shape * dragon = ObjLoader::loadObjFile("Assets\\Models\\dragon.obj");
+	Shape * dragon = ObjLoader::loadObjFile("Assets/Models/dragon.obj");
 	shapes.push_back(dragon);
 	for (unsigned int i = 0; i < dragon->meshes.size(); ++i) {
 		renderers.push_back(new MeshRenderer(&(dragon->meshes[i])));
@@ -66,7 +66,7 @@ void DragonScene::init(unsigned int viewportWidth, unsigned int viewportHeight) 
 	dragonMaterialSetting->specularDiffusion = 2.0f;
 
 	// Light.
-	Shape * light = ObjLoader::loadObjFile("Assets\\Models\\quad.obj");
+	Shape * light = ObjLoader::loadObjFile("Assets/Models/quad.obj");
 	shapes.push_back(light);
 	lampRenderer = new MeshRenderer(&(light->meshes[0]));
 	renderers.push_back(lampRenderer);

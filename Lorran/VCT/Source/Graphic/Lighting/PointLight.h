@@ -1,10 +1,10 @@
 #pragma once
 
 #define GLEW_STATIC
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
-#include <glm/gtc/type_ptr.hpp>
-#include <glm/glm.hpp>
+#include "../Include/GL/glew.h"
+#include "../Include/GLFW/glfw3.h"
+#include "../Include/glm/glm.hpp"
+#include "../Include/glm/gtc/type_ptr.hpp"
 
 #include <iostream>
 #include <string>

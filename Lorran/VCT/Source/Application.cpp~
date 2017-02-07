@@ -25,7 +25,7 @@ constexpr float __LOG_INTERVAL_TIME_GUARD = 1.0f;
 #endif
 
 using __DEFAULT_LEVEL = GlassScene; // The scene that will be loaded on startup.
-// (see ScenePack.h for more scenes)
+// (see ScenePack.h for more scenes) CornellScene, DragonScene, MultipleObjectsScene, GlassScene
 
 Application & Application::getInstance() {
 	static Application application;
@@ -91,13 +91,9 @@ void Application::init() {
 	// Initialize graphics.
 	// -------------------------------------
 	int w, h;
-	std::cout << "aqui" << endl;
 	glfwGetWindowSize(currentWindow, &w, &h);
-	std::cout << "aqui2" << endl;
 	MaterialStore::getInstance(); // Initialize material store.
-	std::cout << "aqui3" << endl;
 	graphics.init(w, h);
-	std::cout << "aqui4" << endl;
 	glfwSetWindowSizeCallback(currentWindow, Application::OnWindowResize);
 	glfwSwapInterval(DEFAULT_VSYNC); // vSync.
 	std::cout << "[2] : Graphics initialized." << std::endl;

@@ -6,8 +6,10 @@
 #include <vector>
 
 // External.
-#include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
+#include "../Include/glm/glm.hpp"
+#include "../Include/glm/gtc/type_ptr.hpp"
+//#include <glm/glm.hpp>
+//#include <glm/gtc/type_ptr.hpp>
 
 // Internal.
 #include "Texture2D.h"
@@ -20,7 +22,7 @@
 #include "Renderer/MeshRenderer.h"
 #include "../Utility/ObjLoader.h"
 #include "../Shape/Shape.h"
-//#include "../Application.h"
+#include "../Application.h"
 
 // ----------------------
 // Rendering pipeline.
@@ -32,6 +34,7 @@ void Graphics::init(unsigned int viewportWidth, unsigned int viewportHeight)
 	voxelCamera = OrthographicCamera(viewportWidth / float(viewportHeight));
 	initVoxelization();
 	initVoxelVisualization(viewportWidth, viewportHeight);
+	initRendering();
 }
 
 void Graphics::render(Scene & renderingScene, unsigned int viewportWidth, unsigned int viewportHeight, RenderingMode renderingMode)
@@ -50,9 +53,49 @@ void Graphics::render(Scene & renderingScene, unsigned int viewportWidth, unsign
 		renderVoxelVisualization(renderingScene, viewportWidth, viewportHeight);
 		break;
 	case RenderingMode::VOXEL_CONE_TRACING:
-		//renderScene(renderingScene, viewportWidth, viewportHeight);
+		renderScene(renderingScene, viewportWidth, viewportHeight);
 		break;
 	}
+}
+
+// ----------------------
+// Scene rendering.
+// ----------------------
+void Graphics::initRendering()
+{
+	voxelConeTracingMaterial = MaterialStore::getInstance().findMaterialWithName("voxel_cone_tracing");
+
+	assert(voxelConeTracingMaterial != nullptr);
+}
+
+void Graphics::renderScene(Scene & renderingScene, unsigned int viewportWidth, unsigned int viewportHeight)
+{
+	// Fetch references.	
+	auto & camera = *renderingScene.renderingCamera;
+	const Material * material = voxelConeTracingMaterial;	
+	const GLuint program = material->program;	
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glUseProgram(program);
+
+	// GL Settings.
+	glViewport(0, 0, viewportWidth, viewportHeight);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	// Upload uniforms.
+	uploadCamera(camera, program);
+	uploadGlobalConstants(program, viewportWidth, viewportHeight);
+	uploadLighting(renderingScene, program);
+	uploadRenderingSettings(program);
+
+	// Render.
+	renderQueue(renderingScene.renderers, material->program, true);
 }
 
 void Graphics::uploadLighting(Scene & renderingScene, const GLuint program) const
@@ -163,7 +206,7 @@ void Graphics::initVoxelVisualization(unsigned int viewportWidth, unsigned int v
 	vvfbo2 = new FBO(viewportHeight, viewportWidth);
 
 	// Rendering cube.
-	cubeShape = ObjLoader::loadObjFile("Assets\\Models\\cube.obj");
+	cubeShape = ObjLoader::loadObjFile("Assets/Models/cube.obj");
 	assert(cubeShape->meshes.size() == 1);
 	cubeMeshRenderer = new MeshRenderer(&cubeShape->meshes[0]);
 
