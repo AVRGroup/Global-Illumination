@@ -12,13 +12,13 @@ enum Refl_t { DIFF, SPEC, REFR };
 
 struct Sphere
 {
-	float radius;
-	Refl_t reflectionType;
-	float dummy2;
-	float dummy3;
-	cl_float3 position;
-	cl_float3 color;
-	cl_float3 emission;
+	cl_float radius;
+	cl_int reflectionType;
+	cl_float dummy2;
+	cl_float dummy3;
+	cl_float4 position;
+	cl_float4 color;
+	cl_float4 emission;
 };
 
 namespace PetTracer
@@ -29,7 +29,9 @@ namespace PetTracer
 		CRenderer(std::string title, unsigned int width, unsigned int height)
 			: Renderer(title, width, height),
 			  mPerpectiveCamera(float3( 0.0f, 0.0f, 2.0f ), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 1.0f, 0.0f))
-		{ }
+		{
+			pattern = new float3[mScreenHeight*mScreenWidth];
+		}
 
 	protected:
 		bool Initialize() override
@@ -47,13 +49,21 @@ namespace PetTracer
 			mSpheresBuffer = cl::Buffer( mOpenCLContext, CL_MEM_READ_ONLY, mNumSpheres * sizeof( Sphere ) );
 			mAccumBuffer = cl::Buffer( mOpenCLContext, CL_MEM_READ_WRITE, mScreenHeight*mScreenWidth * sizeof( cl_float3 ) );
 			mCamera = cl::Buffer( mOpenCLContext, CL_MEM_READ_ONLY, sizeof( Camera ) );
+			mQueue.finish();
 			mQueue.enqueueWriteBuffer( mCamera, CL_TRUE, 0, sizeof( Camera ), &mPerpectiveCamera );
+			mQueue.finish();
 			mQueue.enqueueWriteBuffer( mSpheresBuffer, CL_TRUE, 0, mNumSpheres * sizeof( Sphere ), mCPUSpheres );
-			mQueue.enqueueFillBuffer( mAccumBuffer, 0, 0, mScreenHeight*mScreenWidth * sizeof( cl_float3 ) );
+			mQueue.finish();
+			mQueue.enqueueWriteBuffer( mAccumBuffer, CL_TRUE, 0, mScreenHeight*mScreenWidth * sizeof( float3 ), pattern );
+			mQueue.finish();
+			//clEnqueueFillBuffer( mQueue(), mAccumBuffer(), &pattern, sizeof( pattern ), 0, mScreenHeight*mScreenWidth * sizeof( cl_float3 ), 0, NULL, NULL );
+			//mQueue.enqueueFillBuffer<unsigned char>( mAccumBuffer, 0, 0, mScreenHeight*mScreenWidth * sizeof( cl_float3 ) );
 			if ( mNumTriangles > 0 )
 			{
 				mTriangleBuffer = cl::Buffer( mOpenCLContext, CL_MEM_READ_ONLY, mNumTriangles * 3 * sizeof( float3 ) );
+				mQueue.finish();
 				mQueue.enqueueWriteBuffer( mTriangleBuffer, CL_TRUE, 0, mNumTriangles * 3 * sizeof( float3 ), mSceneData );
+				mQueue.finish();
 				delete[ ] mSceneData;
 			}
 
@@ -61,6 +71,7 @@ namespace PetTracer
 
 			mVertexBufferGL = cl::BufferGL( mOpenCLContext, CL_MEM_WRITE_ONLY, mVertexBufferObject );
 			mVBOs.push_back( mVertexBufferGL );
+			mQueue.finish();
 
 			InitializeKernel();
 
@@ -69,6 +80,8 @@ namespace PetTracer
 
 		void Draw() override
 		{
+			mQueue.finish();
+			
 			static int iteration = 1;
 			if ( mResetRender ) { iteration = 1; mResetRender = false; }
 
@@ -77,6 +90,7 @@ namespace PetTracer
 			{
 				mPerpectiveCamera.Clean();
 				mQueue.enqueueWriteBuffer( mCamera, CL_TRUE, 0, sizeof(Camera), &mPerpectiveCamera );
+				mQueue.finish();
 				ClearAccumBuffer();
 			}
 
@@ -87,11 +101,15 @@ namespace PetTracer
 			mOpenCLKernel.setArg( 6,  iteration );
 			mOpenCLKernel.setArg( 8, rand() / RAND_MAX );
 			mOpenCLKernel.setArg( 9, rand() / RAND_MAX );
+			mQueue.finish();
 
-			mKPerspectiveCamera.setArg( 0, rand() );
+			//mKPerspectiveCamera.setArg( 3, rand() );
 			
 			if(mTrace)RunKernel();
 
+			glFinish();
+			mQueue.finish();
+			
 			iteration++;
 
 			glClear( GL_COLOR_BUFFER_BIT );
@@ -112,7 +130,10 @@ namespace PetTracer
 
 		void OnShutdow() override
 		{
+			glFinish();
+			mQueue.finish();
 			glDeleteBuffers( 1, &mVertexBufferObject );
+			delete[ ] pattern;
 		}
 
 		void KeyDown( SDL_Keycode const& key )
@@ -200,7 +221,9 @@ namespace PetTracer
 			// Wait for any work to finish
 			mQueue.finish();
 			// Fill the accumulation buffer with 0s
-			mQueue.enqueueFillBuffer( mAccumBuffer, 0, 0, mScreenWidth*mScreenHeight * sizeof( cl_float3 ) );
+			mQueue.enqueueWriteBuffer( mAccumBuffer, CL_TRUE, 0, mScreenHeight*mScreenWidth * sizeof( float3 ), pattern );
+			//clEnqueueFillBuffer( mQueue(), mAccumBuffer(), &pattern, sizeof( pattern ), 0, mScreenHeight*mScreenWidth * sizeof( cl_float3 ), 0, NULL, NULL );
+			//mQueue.enqueueFillBuffer( mAccumBuffer, 0, 0, mScreenWidth*mScreenHeight * sizeof( cl_float3 ) );
 			mQueue.finish();
 			mResetRender = true;
 		}
@@ -243,6 +266,7 @@ namespace PetTracer
 			mKIntersectScene.setArg( 5, mVertexBufferGL );
 			mKIntersectScene.setArg( 6, mScreenWidth );
 			mKIntersectScene.setArg( 7, mScreenHeight );
+			mQueue.finish();
 		}
 
 		void RunKernel()
@@ -275,22 +299,23 @@ namespace PetTracer
 
 
 			mQueue.enqueueNDRangeKernel( mKPerspectiveCamera, NULL, global_work_size, local_work_size ); // local_work_size
+			mQueue.finish();
 
-																										 //Make sure OpenGL is done using the VBOs
+			//Make sure OpenGL is done using the VBOs
 			glFinish();
 
 			//this passes in the vector of VBO buffer objects 
 			mQueue.enqueueAcquireGLObjects( &mVBOs );
-			//mQueue.finish();
+			mQueue.finish();
 
 			// launch the kernel
 			//for(int i = 0; i < 10; i++) mQueue.enqueueNDRangeKernel( mKIntersectScene, NULL, global_work_size, local_work_size ); // local_work_size
 			mQueue.enqueueNDRangeKernel( mOpenCLKernel, NULL, global_work_size, local_work_size ); // local_work_size
-																								   //mQueue.finish();
+			mQueue.finish();
 
 																								   //Release the VBOs so OpenGL can play with them
 			mQueue.enqueueReleaseGLObjects( &mVBOs );
-			//mQueue.finish();
+			mQueue.finish();
 		}
 
 		bool CreateProgram()
@@ -501,6 +526,7 @@ namespace PetTracer
 
 		unsigned int mNumTriangles;
 		float3 *mSceneData = NULL;
+		float3 *pattern = NULL;
 
 		static const int mNumSpheres = 9;
 		Sphere mCPUSpheres[mNumSpheres];

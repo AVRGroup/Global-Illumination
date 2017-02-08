@@ -9,8 +9,8 @@
 #include <SDL.h>
 #include <SDL_opengl.h>
 
-#define CL_HPP_MINIMUM_OPENCL_VERSION 100
-#define CL_HPP_TARGET_OPENCL_VERSION 120
+#define CL_HPP_MINIMUM_OPENCL_VERSION 110
+#define CL_HPP_TARGET_OPENCL_VERSION 110
 #include <CL/cl2.hpp>
 
 #include <string>
