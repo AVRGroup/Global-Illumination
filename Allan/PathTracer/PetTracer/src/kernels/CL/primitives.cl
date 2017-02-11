@@ -83,4 +83,19 @@ int IntersectTriangleEG(Ray const* r, float3 v1, float3 e1, float3 e2, Intersect
 	}
 }
 
+int IntersectBox(Ray const* r, float3 invDir, BBox box, float maxT)
+{
+	const float3 tMinT = ( box.pmin.xyz - r->o.xyz ) * invDir;
+	const float3 tMaxT = ( box.pmax.xyz - r->o.xyz ) * invDir;
+
+	const float3 tMin = min( tMinT, tMaxT );
+	const float3 tMax = max( tMinT, tMaxT );
+
+	const float t1 = min( min( tMax.x, min( tMax.y, tMax.z ) ), maxT );
+	const float t0 = max( max( tMin.x, min( tMin.y, tMin.z ) ), 0.0f );
+
+	return ( t1 >= t0 ) ? 1 : 0;
+}
+
+
 #endif

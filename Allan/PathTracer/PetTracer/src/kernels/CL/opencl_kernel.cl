@@ -28,6 +28,10 @@ bool intersectScene( __global Sphere* spheres, __global float4* triangles, const
 	Intersection intersect;
 	intersect.uvwt = (float4)(0.0f, 0.0f, 0.0f, INFINITY );
 
+	BBox meshBB;
+	meshBB.pmin = ( float4 )( -0.10f, -0.10f, -0.10f, 0.0f );
+	meshBB.pmax = ( float4 )(  0.10f,  0.10f,  0.10f, 0.0f );
+
 	int shapeType = -1;
 	*sphereID = -1;
 
@@ -40,13 +44,16 @@ bool intersectScene( __global Sphere* spheres, __global float4* triangles, const
 		}
 	}
 
-
-	for( unsigned int i = 0; i <  triangleCount; i++ )
+	float3 invDir = native_recip( ray->d.xyz );
+	if ( IntersectBox(ray, invDir, meshBB, INFINITY ) )
 	{
-		if ( IntersectTriangleEG( ray, triangles[i*3].xyz, triangles[i*3 + 1].xyz, triangles[i*3 + 2].xyz, &intersect ) )
+		for ( unsigned int i = 0; i < triangleCount; i++ )
 		{
-			shapeType = 2;
-			*sphereID = i;
+			if ( IntersectTriangleEG( ray, triangles[i * 3].xyz, triangles[i * 3 + 1].xyz, triangles[i * 3 + 2].xyz, &intersect ) )
+			{
+				shapeType = 2;
+				*sphereID = i;
+			}
 		}
 	}
 

@@ -290,7 +290,7 @@ namespace PetTracer
 			// every pixel in the image has its own thread or "work item",
 			// so the total amount of work items equals the number of pixels
 			std::size_t global_work_size = mScreenWidth * mScreenHeight;
-			std::size_t local_work_size = 64;//mKIntersectScene.getWorkGroupInfo<CL_KERNEL_WORK_GROUP_SIZE>( mOpenCLDevice );
+			std::size_t local_work_size = 64;//mOpenCLKernel.getWorkGroupInfo<CL_KERNEL_WORK_GROUP_SIZE>( mOpenCLDevice );
 
 											 // Ensure the global work size is a multiple of local work size
 			if ( global_work_size % local_work_size != 0 )
@@ -306,12 +306,10 @@ namespace PetTracer
 
 			//this passes in the vector of VBO buffer objects 
 			mQueue.enqueueAcquireGLObjects( &mVBOs );
-			mQueue.finish();
 
 			// launch the kernel
 			//for(int i = 0; i < 10; i++) mQueue.enqueueNDRangeKernel( mKIntersectScene, NULL, global_work_size, local_work_size ); // local_work_size
 			mQueue.enqueueNDRangeKernel( mOpenCLKernel, NULL, global_work_size, local_work_size ); // local_work_size
-			mQueue.finish();
 
 																								   //Release the VBOs so OpenGL can play with them
 			mQueue.enqueueReleaseGLObjects( &mVBOs );
@@ -360,7 +358,7 @@ namespace PetTracer
 				// get the first mesh
 				tinyobj::shape_t& shape = shapes[0];
 				tinyobj::mesh_t& mesh = shape.mesh;
-				mNumTriangles = mesh.indices.size() / 3;
+				mNumTriangles = static_cast<unsigned int>(mesh.indices.size() / 3);
 				mSceneData = new float3[mesh.indices.size()];
 
 				std::cout << "Mesh: faces" << mesh.indices.size() << " - " << mNumTriangles << std::endl;
@@ -480,7 +478,7 @@ namespace PetTracer
 			program = cl::Program( mOpenCLContext, source.c_str() );
 
 			// Build the program for the selected device
-			cl_int result = program.build( { mOpenCLDevice }, " -I../../../src/kernels/CL" );
+			cl_int result = program.build( { mOpenCLDevice }, " -I../../../src/kernels/CL -cl-fast-relaxed-math -DMAC" );
 			{
 				cl::string buildLog = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>( mOpenCLDevice );
 				std::string logFileName = path + ".buildlog.txt";
