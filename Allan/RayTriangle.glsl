@@ -12,11 +12,13 @@ int IntersectTriangle(Ray r, vec3 v1, vec3 v2, vec3 v3 )
 	float temp = dot( e2, s2 ) * invd;
 
 	if(b1 < 0.0f || b1 > 1.0f || b2 < 0.0f || b2 > 1.0f || b1 + b2 > 1.0f
+		|| temp < 0.0f || temp > intersec.uvwt.w) // intersec.uvwt.w: t da ultima interseção
 	{
 		return 0;
 	}
 	else
 	{
+		// Nesse ponto há uma interseção
 		// b1 e b2 são respectivamente u, v do triangulo
 		// (para ter as coordenadas finais de textura deve interpolar as coordenadas de cada vertice por uv)
 		// UVf = lerp(uv[v1], uv[v2], u) + lerp(uv[v1], uv[v3], v)
