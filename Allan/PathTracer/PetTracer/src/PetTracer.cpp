@@ -6,6 +6,9 @@
 #include <iostream>
 #include <string>
 
+#include <ctime>
+#include <chrono>
+
 #include "tiny_obj_loader.h"
 
 enum Refl_t { DIFF, SPEC, REFR };
@@ -480,7 +483,7 @@ namespace PetTracer
 			// Build the program for the selected device
 			cl_int result = program.build( { mOpenCLDevice }, " -I../../../src/kernels/CL -cl-fast-relaxed-math -DMAC" );
 			{
-				cl::string buildLog = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>( mOpenCLDevice );
+				std::string buildLog = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>( mOpenCLDevice );
 				std::string logFileName = path + ".buildlog.txt";
 				FILE* log;
 				fopen_s( &log, logFileName.c_str(), "w" );

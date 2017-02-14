@@ -164,6 +164,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\Buffer.cpp" />
+    <ClCompile Include="src\BVH\BVH.cpp" />
+    <ClCompile Include="src\BVH\SplitBVHBuilder.cpp" />
     <ClCompile Include="src\Camera.cpp" />
     <ClCompile Include="src\ext\glad.c" />
     <ClCompile Include="src\ext\tiny_obj_loader.cpp" />
@@ -188,7 +191,11 @@
     <ClInclude Include="include\math\quaternion.h" />
     <ClInclude Include="include\Renderer.h" />
     <ClInclude Include="include\TracerTypes.h" />
+    <ClInclude Include="src\Buffer.h" />
     <ClInclude Include="src\BVH\BVH.h" />
+    <ClInclude Include="src\BVH\BVHNode.h" />
+    <ClInclude Include="src\BVH\SplitBVHBuilder.h" />
+    <ClInclude Include="src\Scene\Scene.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
