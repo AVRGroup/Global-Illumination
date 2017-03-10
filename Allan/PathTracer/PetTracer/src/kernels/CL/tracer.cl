@@ -1,15 +1,16 @@
 #include <path.cl>
 #include <primitives.cl>
 #include <random.cl>
+#include <bvh.cl>
 
-
-void IntersectSceneClosest( __global Sphere* scene, const int sphereCount, Ray* r, Intersection* isect )
+void IntersectScene( SceneData const* scenedata, __global Sphere* scene, const int sphereCount, Ray* r, Intersection* isect )
 {
 	isect->shapeID = -1;
 	isect->primID = -1;
 	isect->uvwt = (float4)( 0.0f, 0.0f, 0.0f, 1e20f );
+	r->o.w = 1e20f;
 
-	for ( int i = 0; i < sphereCount; i++ )
+	/*for ( int i = 0; i < sphereCount; i++ )
 	{
 		float hitDistance = IntersectSphere( &scene[i], r );
 
@@ -18,37 +19,76 @@ void IntersectSceneClosest( __global Sphere* scene, const int sphereCount, Ray* 
 			isect->shapeID = i;
 			isect->uvwt.w = hitDistance;
 		}
-	}
+	}*/
+
+	IntersectSceneClosest( scenedata, r, isect );
+
+	/*BBox meshBB;
+	meshBB.pmin = ( float4 )( -0.10f, -0.10f, -0.10f, 0.0f );
+	meshBB.pmax = ( float4 )( 0.10f, 0.10f, 0.10f, 0.0f );
+	const float3 invDir = makeFloat3( 1.0f, 1.0f, 1.0f ) / ( r->d.xyz );
+	if ( IntersectBox( r, invDir, meshBB, 1e20f ) )
+	{
+		isect->uvwt.x = 1.0f;
+	}*/
 }
 
+/*float3 getHeatMapColor( float value )
+{
+	const float3 color[4] = { makeFloat3( 0,0,1 ), makeFloat3( 0,1,0 ), makeFloat3( 1,1,0 ), makeFloat3( 1,0,0 ) };
+	// A static array of 4 colors:  (blue,   green,  yellow,  red) using {r,g,b} for each.
 
-__kernel
-void IntersectClosest(
+	int idx1;        // |-- Our desired color will be between these two indexes in "color".
+	int idx2;        // |
+	float fractBetween = 0;  // Fraction between "idx1" and "idx2" where our value is.
+
+	if ( value <= 0 ) { idx1 = idx2 = 0; }    // accounts for an input <=0
+	else if ( value >= 1 ) { idx1 = idx2 = 4 - 1; }    // accounts for an input >=0
+	else
+	{
+		value = value * ( 4 - 1 );        // Will multiply value by 3.
+		idx1  = floor( value );                  // Our desired color will be after this index.
+		idx2  = idx1 + 1;                        // ... and before this index (inclusive).
+		fractBetween = value - (float)( idx1 );    // Distance between the two indexes (0-1).
+	}
+
+	return ( color[idx2] - color[idx1] )*fractBetween + color[idx1];
+}*/
+
+
+__attribute__( ( reqd_work_group_size( 64, 1, 1 ) ) )
+__kernel void IntersectClosest(
 				// Scene description
-				__global Sphere* spheres,
-				const int sphereCount,
+				__global Sphere* spheres,		//0
+				const int sphereCount,			//1
+				__global float4* vertices,		//2
+				__global int4*	 faces,			//3
+				__global BBox*	 nodes,			//4
 				// Rays input
-				__global Ray* rays,
-				unsigned int numRays,
+				__global Ray* rays,				//5
+				unsigned int numRays,			//6
 				// Ray hit output
-				__global Intersection* hits,
+				__global Intersection* hits,	//7
 				// Debug output
-				__global float3* output,
-				unsigned int width,
-				unsigned int height
+				__global float3* output,		//8
+				unsigned int width,				//9
+				unsigned int height				//10
 				)
 {
 	int globalID = get_global_id( 0 );
 	int localID = get_local_id( 0 );
 
+	SceneData scenedata = { nodes, vertices, faces };
+
 	// check for work
-	if(globalID < numRays)
+	if ( globalID < numRays )
 	{
-		__global Ray* r = rays + globalID;
-		Ray ray = *r;
+		Ray r = rays[globalID];
+
+		
 
 		Intersection isect;
-		IntersectSceneClosest( spheres, sphereCount, &ray, &isect );
+		IntersectScene( &scenedata, spheres, sphereCount, &r, &isect );
 
 		hits[globalID] = isect;
 
@@ -56,16 +96,25 @@ void IntersectClosest(
 		int x_coord = globalID % width;
 		int y_coord = globalID / width;
 
-		float fx = ( ( float ) x_coord / ( float ) width ) * 2.0f - 1.0f;
-		float fy = ( ( float ) y_coord / ( float ) height ) * 2.0f - 1.0f;
+		float fx = ( ( float ) (x_coord + 0.0001f) / ( float ) width ) * 2.0f - 1.0f;
+		float fy = ( ( float ) (y_coord + 0.0001f) / ( float ) height ) * 2.0f - 1.0f;
 
 		union Colour { float c; uchar4 components; } fcolour;
 
+		float3 heatColor = isect.uvwt.x / ( isect.uvwt.x + 1.0f );
+		heatColor.z = 0.125f;
+
 		fcolour.components = ( uchar4 )
-				( ( unsigned char )( ( r->o.w / ( r->o.w + 1 ) ) * 255 ),
-				  ( unsigned char )( ( r->o.w / ( r->o.w + 1 ) ) * 255 ),
-				  ( unsigned char )( ( r->o.w / ( r->o.w + 1 ) ) * 255 ),
-				  1 );
+				( ( unsigned char )( ( heatColor.x ) * 255 ),
+				( unsigned char )( ( heatColor.y ) * 255 ),
+				( unsigned char )( ( heatColor.z ) * 255 ),
+				1 );
+
+		/*fcolour.components = ( uchar4 )
+			( ( unsigned char )( ( fx / ( fx + 1 ) ) * 255 ),
+			( unsigned char )( ( fy / ( fy + 1 ) ) * 255 ),
+				( unsigned char )( ( isect.uvwt.w / ( isect.uvwt.w + 1 ) ) * 255 ),
+				1 );*/
 
 		output[globalID] = ( float3 )( fx, fy, fcolour.c );
 

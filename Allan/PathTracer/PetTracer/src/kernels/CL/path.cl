@@ -57,4 +57,23 @@ typedef struct _differentialGeometry
 
 } DifferentialGeometry;
 
+float4 makeFloat4(float x, float y, float z, float w)
+{
+	float4 res;
+	res.x = x;
+	res.y = y;
+	res.z = z;
+	res.w = w;
+	return res;
+}
+
+float3 makeFloat3( float x, float y, float z )
+{
+	float3 res;
+	res.x = x;
+	res.y = y;
+	res.z = z;
+	return res;
+}
+
 #endif

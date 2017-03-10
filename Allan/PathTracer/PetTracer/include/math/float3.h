@@ -120,7 +120,7 @@ namespace PetTracer
 	}
 
 	template<typename T>
-	inline std::ostream& operator<<(std::ostream& stream, float3 const& v1)
+	inline std::ostream& operator<<(std::ostream& stream, vec3<T> const& v1)
 	{
 		stream << (float)v1.x << ", " << v1.y << ", " << v1.z;
 		return stream;

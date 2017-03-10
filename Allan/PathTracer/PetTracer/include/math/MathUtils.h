@@ -36,24 +36,19 @@ namespace PetTracer
 	typedef int32_t		int32;
 	typedef int64_t		int64;
 
-	inline int8   min( int8  x, int8  y )   { return ( x < y ) ? x : y; }
-	inline int16  min( int16 x, int16 y )   { return ( x < y ) ? x : y; }
-	inline int32  min( int32 x, int32 y )   { return ( x < y ) ? x : y; }
-	inline int64  min( int64 x, int64 y )   { return ( x < y ) ? x : y; }
-	inline uint8  min( uint8  x, uint8  y ) { return ( x < y ) ? x : y; }
-	inline uint16 min( uint16 x, uint16 y ) { return ( x < y ) ? x : y; }
-	inline uint32 min( uint32 x, uint32 y ) { return ( x < y ) ? x : y; }
-	inline uint64 min( uint64 x, uint64 y ) { return ( x < y ) ? x : y; }
+	/*template<typename T>
+	inline T   min( T const&  x, T const&  y )  { return ( x < y ) ? x : y; }
 
-	inline int8   max( int8  x, int8  y )   { return ( x > y ) ? x : y; }
-	inline int16  max( int16 x, int16 y )   { return ( x > y ) ? x : y; }
-	inline int32  max( int32 x, int32 y )   { return ( x > y ) ? x : y; }
-	inline int64  max( int64 x, int64 y )   { return ( x > y ) ? x : y; }
-	inline uint8  max( uint8  x, uint8  y ) { return ( x > y ) ? x : y; }
-	inline uint16 max( uint16 x, uint16 y ) { return ( x > y ) ? x : y; }
-	inline uint32 max( uint32 x, uint32 y ) { return ( x > y ) ? x : y; }
-	inline uint64 max( uint64 x, uint64 y ) { return ( x > y ) ? x : y; }
+	template<typename T>
+	inline T   min( T const&  x, T const&  y, T const& z ) { return min( x, min( y, z ) ); }
 
+	template<typename T>
+	inline T   max( T const&  x, T const&  y )	{ return ( x > y ) ? x : y; }
+
+	template<typename T>
+	inline T   max( T const&  x, T const&  y, T const& z ) { return max( x, max( y, z ) ); }*/
+
+	// FLOAT
 	inline float min( float x, float y )
 	{
 		return ( x < y ) ? x : y;
@@ -72,6 +67,37 @@ namespace PetTracer
 	inline float max( float x, float y, float z )
 	{
 		return max( x, max( y, z ) );
+	}
+
+	// INT
+	inline int32 min( int32 x, int32 y )
+	{
+		return ( x < y ) ? x : y;
+	}
+
+	inline int32 max( int32 x, int32 y )
+	{
+		return ( x > y ) ? x : y;
+	}
+
+	inline int32 min( int32 x, int32 y, int32 z )
+	{
+		return min( x, min( y, z ) );
+	}
+
+	inline int32 max( int32 x, int32 y, int32 z )
+	{
+		return max( x, max( y, z ) );
+	}
+
+	inline int64 min( int64 x, int64 y )
+	{
+		return ( x < y ) ? x : y;
+	}
+
+	inline int64 max( int64 x, int64 y )
+	{
+		return ( x > y ) ? x : y;
 	}
 
 	inline quaternion rotation_quaternion( float3 const& axe, float angle )
@@ -98,15 +124,20 @@ namespace PetTracer
 	}
 
 	template<typename T>
-	inline float max( vec3<T> const& f )
+	inline T max( vec3<T> const& f )
 	{
-		return max( f.x, max( f.y, f.z ) );
+		return max( f.x, f.y, f.z );
 	}
 
 	template<typename T>
-	inline float min( vec3<T> const& f )
+	inline T min( vec3<T> const& f )
 	{
-		return min( f.x, min( f.y, f.z ) );
+		return min( f.x, f.y, f.z );
+	}
+
+	inline float3 max( float3 const& f1, float3 const& f2 )
+	{
+		return float3( max( f1.x, f2.x ), max( f1.y, f2.y ), max( f1.z, f2.z ) );
 	}
 
 	template<typename T>
@@ -118,8 +149,13 @@ namespace PetTracer
 	template<typename T>
 	inline vec3<T> max( vec3<T> const& f1, vec3<T> const& f2, vec3<T> const& f3 )
 	{
-		return vec3<T>( max(max( f1.x, f2.x ), f3.x), max( max( f1.y, f2.y ), f3.y ), max( max( f1.z, f2.z ), f3.z ), max( max( f1.w, f2.w ), f3.w ) );
+		return vec3<T>( max( f1.x, f2.x, f3.x), max( f1.y, f2.y, f3.y ), max( f1.z, f2.z, f3.z ), max( f1.w, f2.w, f3.w ) );
 	};
+
+	inline float3 min( float3 const& f1, float3 const& f2 )
+	{
+		return float3( min( f1.x, f2.x ), min( f1.y, f2.y ), min( f1.z, f2.z ) );
+	}
 
 	template<typename T>
 	inline vec3<T> min( vec3<T> const& f1, vec3<T> const& f2 )
@@ -130,11 +166,16 @@ namespace PetTracer
 	template<typename T>
 	inline vec3<T> min( vec3<T> const& f1, vec3<T> const& f2, vec3<T> const& f3 )
 	{
-		return vec3<T>( min( min( f1.x, f2.x ), f3.x ), min( min( f1.y, f2.y ), f3.y ), min( min( f1.z, f2.z ), f3.z ), min( min( f1.w, f2.w ), f3.w ) );
+		return vec3<T>( min( f1.x, f2.x, f3.x ), min( f1.y, f2.y, f3.y ), min( f1.z, f2.z, f3.z ), min( f1.w, f2.w, f3.w ) );
 	};
 
 	inline float sqr( float x ) { return x*x; };
 	
+	inline int3 clamp( int3 const& v1, int3 const& pmin, int3 const& pmax )
+	{
+		return min( pmax, max( pmin, v1 ) );
+	}
+
 	template<typename T>
 	inline T clamp( T const& v1, T const& pmin, T const& pmax )
 	{
@@ -144,7 +185,7 @@ namespace PetTracer
 	template<typename T, typename N>
 	inline T lerp( T const& v1, T const& v2, N const& u )
 	{
-		return u * v1 + ( 1 - u ) * v2;
+		return (1 - u) * v1 + (u) * v2;
 	}
 	
 	/*template<typename T>
@@ -154,18 +195,18 @@ namespace PetTracer
 	}*/
 
 	template <typename T>
-	inline void Swap( T& a, T& b ) { T t = a; b = a; a = t; }
+	inline void Swap( T& a, T& b ) { T t = a; a = b; b = t; }
 
 	class AABB
 	{
 	public:
 		AABB( float4 const& pMin, float4 const& pMax )
 		{
-			mMin = min( pMin, pMax );
-			mMax = max( pMin, pMax );
+			mMin = pMin;
+			mMax = pMax;
 		}
 
-		AABB() : mMin(), mMax()
+		AABB() : mMin( FLT_MAX, FLT_MAX, FLT_MAX ), mMax( -FLT_MAX, -FLT_MAX, -FLT_MAX )
 		{
 		}
 
@@ -189,45 +230,56 @@ namespace PetTracer
 		inline float4 Min() const { return mMin; };
 		inline float4 Max() const { return mMax; };
 
-		inline void Grow( float4 const& vec )
+		inline void Grow( float3 const& vec )
 		{
-			float t0 = mMin.w, t1 = mMax.w;
 			mMin = min( mMin, vec );
 			mMax = max( mMax, vec );
-			mMin.w = t0;
-			mMax.w = t1;
 		}
 
 		inline void Grow( AABB const& aabb )
 		{
-			float t0 = mMin.w, t1 = mMax.w;
-			mMin = min( mMin, aabb.mMin );
-			mMax = max( mMax, aabb.mMax );
-			mMin.w = t0;
-			mMax.w = t1;
+			Grow( aabb.Min() );
+			Grow( aabb.Max() );
 		}
 
 		inline void Intersect( AABB const& aabb )
 		{
-			float t0 = mMin.w, t1 = mMax.w;
 			mMin = max( mMin, aabb.mMin );
 			mMax = min( mMax, aabb.mMax );
-			mMin.w = t0;
-			mMax.w = t1;
 		}
 
-		// Cast mMin.w to signed int
-		inline int32& Low() { return *( signed int* ) &mMin.w; };
-		inline int32  Low() const { return *( signed int* ) &mMin.w; };
-
-		// Cast mMax.w to signed int
-		inline int32& High() { return *( signed int* ) &mMax.w; };
-		inline int32  High() const { return *( signed int* ) &mMax.w; };
+		inline AABB& operator=( AABB const& rhs ) { mMin = rhs.mMin; mMax = rhs.mMax; return *this; }
+		inline AABB( AABB const& rhs ) { mMin = rhs.mMin; mMax = rhs.mMax; }
 
 	private:
 		float4 mMin;
 		float4 mMax;
 	};
+
+	/*class AABB
+	{
+	public:
+		AABB( void ) : m_mn( FLT_MAX, FLT_MAX, FLT_MAX ), m_mx( -FLT_MAX, -FLT_MAX, -FLT_MAX ) { }
+		AABB( const float3& mn, const float3& mx ) : m_mn( mn ), m_mx( mx ) { }
+
+		void            grow( const float3& pt ) { m_mn = min( m_mn, pt ); m_mx = m_mx.max( pt ); }
+		void            grow( const AABB& aabb ) { grow( aabb.m_mn ); grow( aabb.m_mx ); }
+		void            intersect( const AABB& aabb ) { m_mn = m_mn.max( aabb.m_mn ); m_mx = m_mx.min( aabb.m_mx ); }
+		float           volume( void ) const { if ( !valid() ) return 0.0f; return ( m_mx.x - m_mn.x ) * ( m_mx.y - m_mn.y ) * ( m_mx.z - m_mn.z ); }
+		float           area( void ) const { if ( !valid() ) return 0.0f; float3 d = m_mx - m_mn; return ( d.x*d.y + d.y*d.z + d.z*d.x )*2.0f; }
+		bool            valid( void ) const { return m_mn.x <= m_mx.x && m_mn.y <= m_mx.y && m_mn.z <= m_mx.z; }
+		float3           midPoint( void ) const { return ( m_mn + m_mx )*0.5f; }
+		const float3&    min( void ) const { return m_mn; }
+		const float3&    max( void ) const { return m_mx; }
+		float3&          min( void ) { return m_mn; }
+		float3&          max( void ) { return m_mx; }
+
+		    AABB            operator+   ( const AABB& aabb ) const { AABB u( *this ); u.grow( aabb ); return u; }
+
+	private:
+		float3           m_mn;
+		float3           m_mx;
+	};*/
 }
 
-#endif // !Math_UTILS_H
+#endif // MATH_UTILS_H

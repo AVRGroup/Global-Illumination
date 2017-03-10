@@ -52,16 +52,16 @@ void PerspectiveCamera_GeneratePaths(
 		__global Ray* mRay = rays + ( globalID.y*imgWidth ) + globalID.x;
 
 		// Prepare RNG
-		//Rng rng;
-		//InitRng(rngSeed + globalID.x * 157 + 10433 * globalID.y, &rng);
+		Rng rng;
+		InitRng(rngSeed + globalID.x * 157 + 10433 * globalID.y, &rng);
 
 		// Need to create a proper sampler
-		//float2 sample0 = ( float2 )( RandFloat( &rng ), RandFloat( &rng ) );
+		float2 sample0 = ( float2 )( RandFloat( &rng ), RandFloat( &rng ) );
 
 		// Calculate [0...1] image plane sample
 		float2 imgSample;
-		imgSample.x = (float)globalID.x / imgWidth; /* Sum random offset for antialias */
-		imgSample.y = (float)globalID.y / imgHeight;
+		imgSample.x = ( float ) (globalID.x + 0.0001f) / imgWidth; //+sample0.x / imgWidth; /* Sum random offset for antialias */
+		imgSample.y = ( float ) (globalID.y + 0.0001f) / imgHeight;// +sample0.y / imgHeight;
 
 		// Transform into [-0.5...+0.5] space
 		float2 hSample = imgSample - (float2)(0.5f, 0.5f);
@@ -72,11 +72,11 @@ void PerspectiveCamera_GeneratePaths(
 		mRay->d.xyz = normalize(camera->focalLength * camera->forward + cSample.x * camera->right + cSample.y * camera->up);
 
 		// Ray origin = camera position + nearZ * ray direction
-		mRay->o.xyz = camera->p + camera->zcap.x * camera->forward;
+		mRay->o.xyz = camera->p + camera->zcap.x * mRay->d.xyz;
 		// Max T value = farZ - nearZ
 		mRay->o.w = camera->zcap.y - camera->zcap.x;
 		// Generate random time form [0...1]
-		// Not now
+		mRay->d.w = sample0.x;
 	}
 }
 

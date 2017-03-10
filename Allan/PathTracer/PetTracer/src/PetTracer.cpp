@@ -1,6 +1,11 @@
 #include "Renderer.h"
 #include "TracerTypes.h"
 #include "Camera.h"
+#include "Scene/Scene.h"
+#include "Timer.h"
+
+#include "BVH/BVH.h"
+#include "BVH/PlainBVHTranslator.h"
 
 #include <fstream>
 #include <iostream>
@@ -31,7 +36,7 @@ namespace PetTracer
 	public:
 		CRenderer(std::string title, unsigned int width, unsigned int height)
 			: Renderer(title, width, height),
-			  mPerpectiveCamera(float3( 0.0f, 0.0f, 2.0f ), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 1.0f, 0.0f))
+			  mPerpectiveCamera(float3( 0.0f, 0.0f, 2.0f ), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 1.0f, 0.0f)), mScene(NULL)
 		{
 			pattern = new float3[mScreenHeight*mScreenWidth];
 		}
@@ -137,6 +142,7 @@ namespace PetTracer
 			mQueue.finish();
 			glDeleteBuffers( 1, &mVertexBufferObject );
 			delete[ ] pattern;
+			delete mScene;
 		}
 
 		void KeyDown( SDL_Keycode const& key )
@@ -252,8 +258,9 @@ namespace PetTracer
 			mOpenCLKernel.setArg( 5, seed );
 			mOpenCLKernel.setArg( 7, mRayBuffer );
 			mOpenCLKernel.setArg( 10, mAccumBuffer );
-			mOpenCLKernel.setArg( 11, mTriangleBuffer );
-			mOpenCLKernel.setArg( 12, mNumTriangles );
+			mOpenCLKernel.setArg( 11, *mScene->VerticesPositionBuffer() );
+			mOpenCLKernel.setArg( 12, *mScene->TriangleIndexBuffer() );
+			mOpenCLKernel.setArg( 13, *mScene->BVHNodeBuffer() );
 
 			mKPerspectiveCamera.setArg( 0, mCamera );
 			mKPerspectiveCamera.setArg( 1, mScreenWidth );
@@ -263,12 +270,15 @@ namespace PetTracer
 
 			mKIntersectScene.setArg( 0, mSpheresBuffer );
 			mKIntersectScene.setArg( 1, mNumSpheres );
-			mKIntersectScene.setArg( 2, mRayBuffer );
-			mKIntersectScene.setArg( 3, ( unsigned int ) mScreenWidth * mScreenHeight );
-			mKIntersectScene.setArg( 4, mHitBuffer );
-			mKIntersectScene.setArg( 5, mVertexBufferGL );
-			mKIntersectScene.setArg( 6, mScreenWidth );
-			mKIntersectScene.setArg( 7, mScreenHeight );
+			mKIntersectScene.setArg( 2, *mScene->VerticesPositionBuffer() );
+			mKIntersectScene.setArg( 3, *mScene->TriangleIndexBuffer() );
+			mKIntersectScene.setArg( 4, *mScene->BVHNodeBuffer() );
+			mKIntersectScene.setArg( 5, mRayBuffer );
+			mKIntersectScene.setArg( 6, ( unsigned int ) mScreenWidth * mScreenHeight );
+			mKIntersectScene.setArg( 7, mHitBuffer );
+			mKIntersectScene.setArg( 8, mVertexBufferGL );
+			mKIntersectScene.setArg( 9, mScreenWidth );
+			mKIntersectScene.setArg( 10, mScreenHeight );
 			mQueue.finish();
 		}
 
@@ -284,7 +294,7 @@ namespace PetTracer
 			frames++;
 			if ( dt > 2000L )
 			{
-				std::string title = mTitle + " - " + std::to_string(frames / 2) + " sps";
+				std::string title = mTitle + " - " + std::to_string(frames / 2.0f) + " sps";
 				SDL_SetWindowTitle( mWindow, title.c_str() );
 				frames = 0;
 				lastTime = currentTime;
@@ -293,7 +303,7 @@ namespace PetTracer
 			// every pixel in the image has its own thread or "work item",
 			// so the total amount of work items equals the number of pixels
 			std::size_t global_work_size = mScreenWidth * mScreenHeight;
-			std::size_t local_work_size = 64;//mOpenCLKernel.getWorkGroupInfo<CL_KERNEL_WORK_GROUP_SIZE>( mOpenCLDevice );
+			std::size_t local_work_size = 64; //mOpenCLKernel.getWorkGroupInfo<CL_KERNEL_WORK_GROUP_SIZE>( mOpenCLDevice );
 
 											 // Ensure the global work size is a multiple of local work size
 			if ( global_work_size % local_work_size != 0 )
@@ -310,8 +320,13 @@ namespace PetTracer
 			//this passes in the vector of VBO buffer objects 
 			mQueue.enqueueAcquireGLObjects( &mVBOs );
 
+			local_work_size = 64;
+			if ( global_work_size % local_work_size != 0 )
+				global_work_size = ( ( global_work_size ) / local_work_size + 1 ) * local_work_size;
+			
+
 			// launch the kernel
-			//for(int i = 0; i < 10; i++) mQueue.enqueueNDRangeKernel( mKIntersectScene, NULL, global_work_size, local_work_size ); // local_work_size
+			//mQueue.enqueueNDRangeKernel( mKIntersectScene, NULL, global_work_size, 64 ); // local_work_size
 			mQueue.enqueueNDRangeKernel( mOpenCLKernel, NULL, global_work_size, local_work_size ); // local_work_size
 
 																								   //Release the VBOs so OpenGL can play with them
@@ -346,6 +361,33 @@ namespace PetTracer
 			mPerpectiveCamera.SetSensorSize( float2( ( float ) mScreenWidth / mScreenHeight, 1.0f ) * 0.0359999985f );
 			mPerpectiveCamera.SetFocalLength( 0.05f );
 
+			{
+				std::cout << std::endl << "Opening Scene" << std::endl;
+				Timer<milliseconds> timer;
+				mScene = new Scene ( mOpenCLContext, "../../../data/orig2.obj", &mQueue );
+				std::cout << "Scene opened: " << timer.ElapsedTime() << "ms elapsed." << std::endl;
+				BuildParams params;
+				params.MaxLeafSize = 1;
+				mScene->BuildBVH( params );
+				
+				/*mScene->LoadBVHFromFile( "../../../data/bvhoutput.bvh" );
+				mScene->UploadScene( true );*/
+
+				/*std::cout << std::endl << "Constructing BVH" << std::endl;
+				timer.Start();
+				BuildParams params;
+				params.MaxLeafSize = 1;
+				BVH sceneBVH( mScene, params );
+				std::cout << "BVH constructed: " << timer.ElapsedTime() << "ms elapsed." << std::endl;
+
+				std::cout << std::endl << "Translating BVH" << std::endl;
+				timer.Start();
+				mScene->UpdateBVH( sceneBVH );
+				mScene->UploadScene( true );
+				std::cout << "BVH Translated: " << timer.ElapsedTime() << "ms elapsed." << std::endl;*/
+			}
+
+
 			// Load and preprocess the obj file
 			std::vector<tinyobj::shape_t> shapes;
 			std::vector<tinyobj::material_t> materials;
@@ -355,39 +397,6 @@ namespace PetTracer
 			mNumTriangles = 0;
 
 			// Try to open the file
-			err = tinyobj::LoadObj( shapes, materials, "../../../data/teste.obj", "../../../data" );
-			if ( err == "" )
-			{
-				// get the first mesh
-				tinyobj::shape_t& shape = shapes[0];
-				tinyobj::mesh_t& mesh = shape.mesh;
-				mNumTriangles = static_cast<unsigned int>(mesh.indices.size() / 3);
-				mSceneData = new float3[mesh.indices.size()];
-
-				std::cout << "Mesh: faces" << mesh.indices.size() << " - " << mNumTriangles << std::endl;
-
-				// Pre process the edges
-				for ( unsigned int i = 0; i < mNumTriangles; i++ )
-				{
-					int id  = mesh.indices[i * 3    ]*3;
-					int id2 = mesh.indices[i * 3 + 1]*3;
-					int id3 = mesh.indices[i * 3 + 2]*3;
-
-					float3 v1, v2, v3;
-					v1 = float3( mesh.positions[id ], mesh.positions[id  + 1], mesh.positions[id  + 2] );
-					v2 = float3( mesh.positions[id2], mesh.positions[id2 + 1], mesh.positions[id2 + 2] );
-					v3 = float3( mesh.positions[id3], mesh.positions[id3 + 1], mesh.positions[id3 + 2] );
-
-					// Store in scene data
-					mSceneData[i * 3    ] = v1;
-					mSceneData[i * 3 +1 ] = v2 - v1;
-					mSceneData[i * 3 +2 ] = v3 - v1;
-				}
-			}
-			else
-			{
-				std::cout << "Read file error: " << err << std::endl;
-			}
 
 			// left wall
 			spheres[0].radius	= 200.0f;
@@ -399,42 +408,42 @@ namespace PetTracer
 			// right wall
 			spheres[1].radius	= 200.0f;
 			spheres[1].position = { 200.6f, 0.0f, 0.0f };
-			spheres[1].color    = { 0.25f, 0.25f, 0.75f };
+			spheres[1].color    = { 0.25f, 0.25f, 0.25f }; // floor
 			spheres[1].emission = { 0.0f, 0.0f, 0.0f };
 			spheres[1].reflectionType = DIFF;
 
 			// floor
 			spheres[2].radius	= 200.0f;
 			spheres[2].position = { 0.0f, -200.4f, 0.0f };
-			spheres[2].color	= { 0.75f, 0.75f, 0.75f };
+			spheres[2].color	= { 0.75f, 0.75f, 0.75f }; //Suzane
 			spheres[2].emission = { 0.0f, 0.0f, 0.0f };
 			spheres[2].reflectionType = DIFF;
 
 			// ceiling
 			spheres[3].radius	= 200.0f;
 			spheres[3].position = { 0.0f, 200.4f, 0.0f };
-			spheres[3].color	= { 0.75f, 0.75f, 0.75f };
+			spheres[3].color	= { 0.75f, 0.75f, 0.75f }; // front wall
 			spheres[3].emission = { 0.0f, 0.0f, 0.0f };
 			spheres[3].reflectionType = DIFF;
 
 			// back wall
 			spheres[4].radius   = 200.0f;
 			spheres[4].position = { 0.0f, 0.0f, -200.4f };
-			spheres[4].color    = { 0.75f, 0.75f, 0.75f };
+			spheres[4].color    = { 0.75f, 0.75f, 0.75f }; // Celling
 			spheres[4].emission = { 0.0f, 0.0f, 0.0f };
 			spheres[4].reflectionType = DIFF;
 
 			// front wall 
 			spheres[5].radius   = 200.0f;
 			spheres[5].position = { 0.0f, 0.0f, 202.0f };
-			spheres[5].color    = { 0.75f, 0.75f, 0.75f };
+			spheres[5].color    = { 0.25f, 0.75f, 0.25f }; // right wall
 			spheres[5].emission = { 0.0f, 0.0f, 0.0f };
 			spheres[5].reflectionType = DIFF;
 
 			// left sphere
 			spheres[6].radius   = 0.16f;
 			spheres[6].position = { -0.25f, -0.24f, -0.1f };
-			spheres[6].color    = { 1.0f, 1.0f, 1.0f };
+			spheres[6].color    = { 0.75f, 0.0f, 0.0f };
 			spheres[6].emission = { 0.0f, 0.0f, 0.0f };
 			spheres[6].reflectionType = DIFF;
 
@@ -448,8 +457,8 @@ namespace PetTracer
 			// lightsource
 			spheres[8].radius   = 1.0f;
 			spheres[8].position = { 0.0f, 2.36f, 0.0f };
-			spheres[8].color    = { 0.0f, 0.0f, 0.0f };
-			spheres[8].emission = { 12.0f, 12.0f, 12.0f };
+			spheres[8].color    = { 0.0f, 75.0f, 0.0f };
+			spheres[8].emission = { 24.0f, 24.0f, 24.0f };
 			spheres[8].reflectionType = DIFF;
 		}
 
@@ -532,6 +541,8 @@ namespace PetTracer
 		static const int mNumSpheres = 9;
 		Sphere mCPUSpheres[mNumSpheres];
 		Camera mPerpectiveCamera;
+
+		Scene* mScene;
 
 		bool mResetRender = false;
 

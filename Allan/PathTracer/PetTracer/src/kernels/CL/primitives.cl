@@ -83,16 +83,40 @@ int IntersectTriangleEG(Ray const* r, float3 v1, float3 e1, float3 e2, Intersect
 	}
 }
 
-int IntersectBox(Ray const* r, float3 invDir, BBox box, float maxT)
+int IntersectTriangle( Ray const* r, float3 v1, float3 v2, float3 v3, Intersection* isect )
 {
-	const float3 tMinT = ( box.pmin.xyz - r->o.xyz ) * invDir;
-	const float3 tMaxT = ( box.pmax.xyz - r->o.xyz ) * invDir;
+	const float3 e1 = v2 - v1;
+	const float3 e2 = v3 - v1;
+	const float3 s1 = cross( r->d.xyz, e2 );
+	const float  invd = native_recip( dot( s1, e1 ) );
+	const float3 d = r->o.xyz - v1;
+	const float  b1 = dot( d, s1 ) * invd;
+	const float3 s2 = cross( d, e1 );
+	const float  b2 = dot( r->d.xyz, s2 ) * invd;
+	const float temp = dot( e2, s2 ) * invd;
 
-	const float3 tMin = min( tMinT, tMaxT );
-	const float3 tMax = max( tMinT, tMaxT );
+	if ( b1 < 0.f || b1 > 1.f || b2 < 0.f || b1 + b2 > 1.f
+		|| temp < 0.f || temp > isect->uvwt.w )
+	{
+		return 0;
+	}
+	else
+	{
+		isect->uvwt = makeFloat4( isect->uvwt.x, b2, 0.f, temp );
+		return 1;
+	}
+}
 
-	const float t1 = min( min( tMax.x, min( tMax.y, tMax.z ) ), maxT );
-	const float t0 = max( max( tMin.x, min( tMin.y, tMin.z ) ), 0.0f );
+int IntersectBox( Ray const* r, float3 invdir, BBox box, float maxt )
+{
+	const float3 f = ( box.pmax.xyz - r->o.xyz ) * invdir;
+	const float3 n = ( box.pmin.xyz - r->o.xyz ) * invdir;
+
+	const float3 tmax = max( f, n );
+	const float3 tmin = min( f, n );
+
+	const float t1 = min( min( tmax.x, min( tmax.y, tmax.z ) ), maxt );
+	const float t0 = max( max( tmin.x, max( tmin.y, tmin.z ) ), 0.f );
 
 	return ( t1 >= t0 ) ? 1 : 0;
 }
