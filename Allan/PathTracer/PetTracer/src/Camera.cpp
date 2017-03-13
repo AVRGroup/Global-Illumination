@@ -53,9 +53,9 @@ namespace PetTracer
 		SetDirty();
 	}
 
-	cl_float2 Camera::GetSensorSize() const
+	float2 Camera::GetSensorSize() const
 	{
-		return { mDim.x, mDim.y };
+		return float2( mDim.x, mDim.y );
 	}
 
 	void Camera::SetDepthRange( float2 const & range )
@@ -63,9 +63,10 @@ namespace PetTracer
 		mZCap = range;
 		SetDirty();
 	}
-	cl_float2 Camera::GetDepthRange() const
+
+	float2 Camera::GetDepthRange() const
 	{
-		return { mZCap.x, mZCap.y };
+		return float2( mZCap.x, mZCap.y );
 	}
 
 	void Camera::Rotate( float angle )

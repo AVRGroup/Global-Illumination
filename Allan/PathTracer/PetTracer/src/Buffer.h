@@ -1,11 +1,9 @@
 #pragma once
 
-#define CL_HPP_MINIMUM_OPENCL_VERSION 110
-#define CL_HPP_TARGET_OPENCL_VERSION 110
-#include <CL/cl.hpp>
+#include <CLW.h>
 
 #include "math/MathUtils.h"
-
+;
 namespace PetTracer
 {
 	enum BufferUsage
@@ -19,8 +17,8 @@ namespace PetTracer
 	class Buffer
 	{
 	public:
-		Buffer( cl::Context const& context, BufferUsage = ReadWrite );
-		Buffer( cl::Context const& context, uint64 size, BufferUsage = ReadWrite );
+		Buffer( CLWContext const& context, BufferUsage = ReadWrite );
+		Buffer( CLWContext const& context, uint64 size, BufferUsage = ReadWrite );
 		~Buffer();
 
 		inline uint64 GetSize() const { return mDataSize; };
@@ -35,13 +33,13 @@ namespace PetTracer
 		void AllocDeviceData();
 		void DeleteDeviceData();
 
-		void UploadToGPU( cl::CommandQueue& queue, bool block, uint64 offsef = 0, bool deleteLocalData = false );
-		void DownloadToCPU( cl::CommandQueue& queue, bool block, uint64 offset = 0 );
+		void UploadToGPU( bool block, uint64 offsef = 0, bool deleteLocalData = false );
+		void DownloadToCPU( bool block, uint64 offset = 0 );
 
 		T const* GetPointer() const;
 		T* GetPointer();
 
-		inline cl::Buffer* CLBuffer() { return mDeviceData; };
+		inline CLWBuffer<T>& CLBuffer() { return mDeviceData; };
 
 		template<typename N>
 		N const* GetPointerType() const;
@@ -50,32 +48,32 @@ namespace PetTracer
 		N* GetPointerType();
 
 	private:
-		uint64			mDataSize;
+		uint64				mDataSize;
 		// Data that resides on the CPU side
-		T*				mLocalData;
+		T*					mLocalData;
 		// Data that resides ont the GPU side
-		cl::Buffer*		mDeviceData;
+		CLWBuffer<T>		mDeviceData;
 		// Reference to OpenCL context
-		cl::Context const&	mContext;
+		CLWContext const&	mContext;
 		// Buffer usage
-		BufferUsage		mUsage;
+		BufferUsage			mUsage;
 	};
 
 	template<typename T>
-	inline Buffer<T>::Buffer( cl::Context const& context, BufferUsage usage )
+	inline Buffer<T>::Buffer( CLWContext const& context, BufferUsage usage )
 		: mDataSize( 0 ),
 		mLocalData( NULL ),
-		mDeviceData( NULL ),
+		mDeviceData(),
 		mContext( context ),
 		mUsage( usage )
 	{
 	}
 
 	template<typename T>
-	inline Buffer<T>::Buffer( cl::Context const& context, uint64 size, BufferUsage usage )
+	inline Buffer<T>::Buffer( CLWContext const& context, uint64 size, BufferUsage usage )
 		: mDataSize( size ),
 		mLocalData( NULL ),
-		mDeviceData( NULL ),
+		mDeviceData( ),
 		mContext( context ),
 		mUsage( usage )
 	{
@@ -127,44 +125,47 @@ namespace PetTracer
 	template<typename T>
 	void Buffer<T>::AllocDeviceData()
 	{
-		mDeviceData = new cl::Buffer( mContext, mUsage, sizeof( T )*mDataSize );
+		mDeviceData = CLWBuffer<T>::Create( mContext, mUsage, mDataSize );
 	}
 
 	template<typename T>
 	void Buffer<T>::DeleteDeviceData()
 	{
-		delete mDeviceData;
-		mDeviceData = NULL;
+		mDeviceData = CLWBuffer<T>();
 	}
 
 	template<typename T>
-	void Buffer<T>::UploadToGPU( cl::CommandQueue& queue, bool block, uint64 offset, bool deleteLocalData )
+	void Buffer<T>::UploadToGPU( bool block, uint64 offset, bool deleteLocalData )
 	{
 		//queue.enqueueWriteBuffer( *mDeviceData, block, offset, mDataSize * sizeof( T ), mLocalData );
-		cl::Event e;
-		T* mapPointer = (T*) queue.enqueueMapBuffer( *mDeviceData, false, CL_MAP_WRITE, 0, GetSizeInBytes(), NULL, &e, NULL );
-		e.wait();
+		T* mappedPointer = nullptr;
+		mContext.MapBuffer( 0, mDeviceData, CL_MAP_WRITE, offset, mDeviceData.GetElementCount() - offset, &mappedPointer ).Wait();
 
-		memcpy( mapPointer, mLocalData, GetSizeInBytes() );
+		memcpy( mappedPointer, mLocalData, GetSizeInBytes() );
 
-		queue.enqueueUnmapMemObject( *mDeviceData, mapPointer, NULL, &e );
-		e.wait();
-		
+		mContext.UnmapBuffer( 0, mDeviceData, mappedPointer ).Wait();
+
 		if ( deleteLocalData )
 			DeleteLocalData();
 	}
 
 	template<typename T>
-	void Buffer<T>::DownloadToCPU( cl::CommandQueue& queue, bool block, uint64 offset )
+	void Buffer<T>::DownloadToCPU( bool block, uint64 offset )
 	{
 		// Make sure that local data is allocated
-		if ( !mDeviceData )
-			AllocDeviceData();
-		queue.enqueueReadBuffer( *mDeviceData, block, offset, mDataSize * sizeof( T ), mLocalData );
+		if ( !mLocalData )
+			AllocLocalData();
+
+		T* mappedPointer = nullptr;
+		mContext.MapBuffer( 0, mDeviceData, CL_MAP_READ, offset, mDeviceData.GetElementCount() - offset, &mappedPointer ).Wait();
+
+		memcpy( mLocalData, mappedPointer, GetSizeInBytes() );
+
+		mContext.UnmapBuffer( 0, mDeviceData, mappedPointer ).Wait();
 	}
 
 	template<typename T>
-	T const * Buffer<T>::GetPointer() const
+	T const* Buffer<T>::GetPointer() const
 	{
 		return mLocalData;
 	}

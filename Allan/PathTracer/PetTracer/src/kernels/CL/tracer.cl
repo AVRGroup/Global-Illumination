@@ -3,7 +3,7 @@
 #include <random.cl>
 #include <bvh.cl>
 
-void IntersectScene( SceneData const* scenedata, __global Sphere* scene, const int sphereCount, Ray* r, Intersection* isect )
+void IntersectScene( SceneData const* scenedata, Ray* r, Intersection* isect )
 {
 	isect->shapeID = -1;
 	isect->primID = -1;
@@ -33,7 +33,7 @@ void IntersectScene( SceneData const* scenedata, __global Sphere* scene, const i
 	}*/
 }
 
-/*float3 getHeatMapColor( float value )
+float3 getHeatMapColor( float value )
 {
 	const float3 color[4] = { makeFloat3( 0,0,1 ), makeFloat3( 0,1,0 ), makeFloat3( 1,1,0 ), makeFloat3( 1,0,0 ) };
 	// A static array of 4 colors:  (blue,   green,  yellow,  red) using {r,g,b} for each.
@@ -53,26 +53,24 @@ void IntersectScene( SceneData const* scenedata, __global Sphere* scene, const i
 	}
 
 	return ( color[idx2] - color[idx1] )*fractBetween + color[idx1];
-}*/
+}
 
 
 __attribute__( ( reqd_work_group_size( 64, 1, 1 ) ) )
 __kernel void IntersectClosest(
 				// Scene description
-				__global Sphere* spheres,		//0
-				const int sphereCount,			//1
-				__global float4* vertices,		//2
-				__global int4*	 faces,			//3
-				__global BBox*	 nodes,			//4
+				__global float4* vertices,		//0
+				__global int4*	 faces,			//1
+				__global BBox*	 nodes,			//2
 				// Rays input
-				__global Ray* rays,				//5
-				unsigned int numRays,			//6
+				__global Ray* rays,				//3
+				unsigned int numRays,			//4
 				// Ray hit output
-				__global Intersection* hits,	//7
+				__global Intersection* hits,	//5
 				// Debug output
-				__global float3* output,		//8
-				unsigned int width,				//9
-				unsigned int height				//10
+				__global float3* output,		//6
+				unsigned int width,				//7
+				unsigned int height				//8
 				)
 {
 	int globalID = get_global_id( 0 );
@@ -88,7 +86,7 @@ __kernel void IntersectClosest(
 		
 
 		Intersection isect;
-		IntersectScene( &scenedata, spheres, sphereCount, &r, &isect );
+		IntersectScene( &scenedata, &r, &isect );
 
 		hits[globalID] = isect;
 
@@ -101,7 +99,7 @@ __kernel void IntersectClosest(
 
 		union Colour { float c; uchar4 components; } fcolour;
 
-		float3 heatColor = isect.uvwt.x / ( isect.uvwt.x + 1.0f );
+		float3 heatColor = isect.uvwt.w / ( isect.uvwt.w + 1.0f );
 		heatColor.z = 0.125f;
 
 		fcolour.components = ( uchar4 )

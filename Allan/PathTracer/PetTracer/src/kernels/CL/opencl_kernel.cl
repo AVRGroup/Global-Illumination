@@ -24,7 +24,7 @@ Ray CreateCamRay(const int x_coord, const int y_coord, const int width, const in
 	return ray;
 }
 
-bool intersectScene( __global Sphere* spheres, SceneData const* scenedata, const Ray* ray, float* t, int* sphereID, const int sphereCount, DifferentialGeometry* difGeo)
+bool intersectScene( SceneData const* scenedata, const Ray* ray, float* t, int* sphereID, DifferentialGeometry* difGeo )
 {
 	Intersection intersect;
 	intersect.uvwt = (float4)(0.0f, 0.0f, 0.0f, INFINITY );
@@ -53,19 +53,19 @@ bool intersectScene( __global Sphere* spheres, SceneData const* scenedata, const
 	float3 e1 = ( float3 )( 0.4f, 0.0f, 0.0f );
 	float3 e3 = ( float3 )( 0.0f, 0.0f, 0.4f );
 	if ( IntersectTriangleEG( ray, v1, e1, e3, &intersect ) )
-		*sphereID = 8;
+		*sphereID = 1;
 	v1 = ( float3 )( 0.20f, 0.92f, 0.175f );
 	e1 *= -1.0f;
 	e3 *= -1.0f;
 	if ( IntersectTriangleEG( ray, v1, e1, e3, &intersect ) )
-		*sphereID = 8;
+		*sphereID = 1;
 
 	difGeo->p = intersect.uvwt.w * ray->d.xyz + ray->o.xyz;
 
 	switch ( shapeType )
 	{
 	case 1:
-		difGeo->n = normalize( difGeo->p - spheres[*sphereID].pos.xyz );
+		//difGeo->n = normalize( difGeo->p - spheres[*sphereID].pos.xyz );
 		break;
 	case 2:
 		difGeo->n = intersect.uvwt.xyz;
@@ -81,7 +81,7 @@ bool intersectScene( __global Sphere* spheres, SceneData const* scenedata, const
 	return *t < INFINITY;
 }
 
-float3 trace(__global Sphere* spheres, SceneData const* scenedata, __global Ray* camray, const int sphereCount, unsigned int* seed0, unsigned int* seed1)
+float3 trace( SceneData const* scenedata, __global Ray* camray, unsigned int* seed0, unsigned int* seed1)
 {
 	Ray ray = *camray;
 
@@ -89,16 +89,18 @@ float3 trace(__global Sphere* spheres, SceneData const* scenedata, __global Ray*
 	float accumDist = 0.0f;
 	float3 mask = ( float3 )( 1.0f, 1.0f, 1.0f );
 
-	for ( int bounces = 0; bounces < 2; bounces++ )
+	for ( int bounces = 0; bounces < 5; bounces++ )
 	{
 		float t;
 		int hitSphereID = 0;
 		DifferentialGeometry difGeo;
 
-		if(!intersectScene(spheres, scenedata, &ray, &t, &hitSphereID, sphereCount, &difGeo ))
+		if(!intersectScene( scenedata, &ray, &t, &hitSphereID, &difGeo ))
 			return accumColor += mask * ( float3 )( 0.0f, 0.0f, 0.0f );
 
-		Sphere hitSphere = spheres[hitSphereID % sphereCount];
+		const int flt = 0;
+		const float3 color   = ((hitSphereID % 2) == 0)  ? makeFloat3(0.75f, 0.75f, 0.75f) : makeFloat3(0.0f, 0.0f, 0.0f);
+		const float3 emissive = ((hitSphereID % 2) == 0) ? makeFloat3(0.0f, 0.0f, 0.0f) : makeFloat3(32.0f, 32.0f, 32.0f);
 
 		float3 hitPoint = difGeo.p;
 
@@ -107,7 +109,7 @@ float3 trace(__global Sphere* spheres, SceneData const* scenedata, __global Ray*
 
 		float3 newDir;
 
-		if ( hitSphere.flt == 0 )
+		if ( flt == 0 )
 		{
 			float rand1 = 2.0f * PI * getRandom( seed0, seed1 );
 			float rand2 = getRandom( seed0, seed1 );
@@ -134,8 +136,8 @@ float3 trace(__global Sphere* spheres, SceneData const* scenedata, __global Ray*
 		if ( mask.z <= 0.001f ) mask.z = 0.0f;
 
 		accumDist += t;
-		accumColor += mask * (hitSphere.emission.xyz/* / accumDist*accumDist */);
-		mask *= hitSphere.color.xyz;
+		accumColor += mask * (emissive/* / accumDist*accumDist */);
+		mask *= color;
 
 		mask *= dot( newDir, normalFacing );
 	}
@@ -145,9 +147,19 @@ float3 trace(__global Sphere* spheres, SceneData const* scenedata, __global Ray*
 
 union Colour { float c; uchar4 components; };
 
-__kernel void render_kernel( __global Sphere* spheres, const int width, const int height, const int sphereCount, __global float3* output,
-							 const int seedt, const int iteration, __global Ray* rays, float random0, float random1, __global float3* accumColor,
-							 __global float4* vertices, __global int4* faces, __global BBox* bvhnodes)
+__kernel void render_kernel(
+			const int width,			//0
+			const int height,			//1
+			__global float3* output,	//2
+			const int seedt,			//3
+			const int iteration,		//4
+			__global Ray* rays,			//5
+			float random0,				//6
+			float random1,				//7
+			__global float3* accumColor,//8
+			__global float3* vertices,	//9
+			__global int4* faces,		//10
+			__global BBox* bvhnodes)	//11
 {
 	const int workItemID = get_global_id( 0 );
 	int x_coord = workItemID % width;
@@ -172,7 +184,7 @@ __kernel void render_kernel( __global Sphere* spheres, const int width, const in
 
 	for ( int i = 0; i < SAMPLES; i++ )
 	{	
-		float3 raySample = trace( spheres, &scenedata, camRay, 9, &seed0, &seed1 );
+		float3 raySample = trace( &scenedata, camRay, &seed0, &seed1 );
 		finalColor += raySample * invSamples;
 	}
 	

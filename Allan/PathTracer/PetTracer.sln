@@ -5,6 +5,8 @@ VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PetTracer", "PetTracer\PetTracer.vcxproj", "{A5162F78-48CC-42D7-B6F0-AD6FEC144CD1}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CLW", "CLW\CLW.vcxproj", "{0BDA870B-77E3-877C-005F-9E7C6C67937C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,14 @@ Global
 		{A5162F78-48CC-42D7-B6F0-AD6FEC144CD1}.Release|x64.Build.0 = Release|x64
 		{A5162F78-48CC-42D7-B6F0-AD6FEC144CD1}.Release|x86.ActiveCfg = Release|Win32
 		{A5162F78-48CC-42D7-B6F0-AD6FEC144CD1}.Release|x86.Build.0 = Release|Win32
+		{0BDA870B-77E3-877C-005F-9E7C6C67937C}.Debug|x64.ActiveCfg = Debug|x64
+		{0BDA870B-77E3-877C-005F-9E7C6C67937C}.Debug|x64.Build.0 = Debug|x64
+		{0BDA870B-77E3-877C-005F-9E7C6C67937C}.Debug|x86.ActiveCfg = Debug|Win32
+		{0BDA870B-77E3-877C-005F-9E7C6C67937C}.Debug|x86.Build.0 = Debug|Win32
+		{0BDA870B-77E3-877C-005F-9E7C6C67937C}.Release|x64.ActiveCfg = Release|x64
+		{0BDA870B-77E3-877C-005F-9E7C6C67937C}.Release|x64.Build.0 = Release|x64
+		{0BDA870B-77E3-877C-005F-9E7C6C67937C}.Release|x86.ActiveCfg = Release|Win32
+		{0BDA870B-77E3-877C-005F-9E7C6C67937C}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

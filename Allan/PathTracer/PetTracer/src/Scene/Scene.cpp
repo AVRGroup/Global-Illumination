@@ -8,27 +8,25 @@
 
 namespace PetTracer
 {
-	Scene::Scene(cl::Context const& context, cl::CommandQueue* queue )
+	Scene::Scene(CLWContext const& context )
 		: mOpenCLContext(context), 
 		  mTrianglesIndexes( context, ReadOnly ),
 		  mVerticesPosition( context, ReadOnly ),
 		  mVerticesNormal( context, ReadOnly ),
 		  mVerticesTexCoord( context, ReadOnly ),
-		  mBVHNodes( context, ReadOnly ),
-		  mQueue( queue )
+		  mBVHNodes( context, ReadOnly )
 	{
 
 
 	}
 
-	Scene::Scene( cl::Context const& context, const char* filePath, cl::CommandQueue* queue, bool uploadscene )
+	Scene::Scene( CLWContext const& context, const char* filePath, bool uploadscene )
 		: mOpenCLContext( context ),
 		  mTrianglesIndexes( context, ReadOnly ),
 		  mVerticesPosition( context, ReadOnly ),
 		  mVerticesNormal( context, ReadOnly ),
 		  mVerticesTexCoord( context, ReadOnly ),
-		  mBVHNodes( context, ReadOnly ),
-		  mQueue(queue)
+		  mBVHNodes( context, ReadOnly )
 	{
 		OpenFile( filePath, uploadscene );
 	}
@@ -117,8 +115,8 @@ namespace PetTracer
 				}
 			}
 
-			if ( UploadToGPU && mQueue != NULL )
-				UploadScene( );
+			if ( UploadToGPU )
+				UploadScene();
 
 			return true;
 		}
@@ -129,24 +127,15 @@ namespace PetTracer
 		}
 	}
 
-	void Scene::UploadScene( bool block, cl::CommandQueue* queue )
+	void Scene::UploadScene( bool block )
 	{
-		cl::CommandQueue* queueToUse = queue;
-		if ( !queueToUse ) queueToUse = mQueue;
-		if ( queueToUse )
-		{
-			mTrianglesIndexes.UploadToGPU( *queueToUse, block );
-			mVerticesPosition.UploadToGPU( *queueToUse, block );
-			mVerticesTexCoord.UploadToGPU( *queueToUse, block );
-			mVerticesNormal.UploadToGPU( *queueToUse, block );
+		mTrianglesIndexes.UploadToGPU( block );
+		mVerticesPosition.UploadToGPU( block );
+		mVerticesTexCoord.UploadToGPU( block );
+		mVerticesNormal.UploadToGPU( block );
 
-			if ( mBVHNodes.GetSize() != 0 )
-				mBVHNodes.UploadToGPU( *queueToUse, block );
-		}
-		else
-		{
-			std::cout << "Scene::UploadScene: Need to use OpenCL CommandQueue!" << std::endl;
-		}
+		if ( mBVHNodes.GetSize() != 0 )
+			mBVHNodes.UploadToGPU( block );
 	}
 
 	void Scene::BuildBVH( BuildParams const& params )

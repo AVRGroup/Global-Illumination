@@ -16,18 +16,7 @@
 
 #include "tiny_obj_loader.h"
 
-enum Refl_t { DIFF, SPEC, REFR };
-
-struct Sphere
-{
-	cl_float radius;
-	cl_int reflectionType;
-	cl_float dummy2;
-	cl_float dummy3;
-	cl_float4 position;
-	cl_float4 color;
-	cl_float4 emission;
-};
+#include <CL/cl.hpp>
 
 namespace PetTracer
 {
@@ -38,7 +27,6 @@ namespace PetTracer
 			: Renderer(title, width, height),
 			  mPerpectiveCamera(float3( 0.0f, 0.0f, 2.0f ), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 1.0f, 0.0f)), mScene(NULL)
 		{
-			pattern = new float3[mScreenHeight*mScreenWidth];
 		}
 
 	protected:
@@ -50,36 +38,26 @@ namespace PetTracer
 
 			glFinish();
 
-			InitScene( mCPUSpheres );
+			InitScene();
 
-			mRayBuffer = cl::Buffer( mOpenCLContext, CL_MEM_READ_WRITE, sizeof( CLTypes::Ray ) * mScreenHeight*mScreenWidth );
-			mHitBuffer = cl::Buffer( mOpenCLContext, CL_MEM_READ_WRITE, sizeof( CLTypes::Intersection ) * mScreenHeight*mScreenWidth );
-			mSpheresBuffer = cl::Buffer( mOpenCLContext, CL_MEM_READ_ONLY, mNumSpheres * sizeof( Sphere ) );
-			mAccumBuffer = cl::Buffer( mOpenCLContext, CL_MEM_READ_WRITE, mScreenHeight*mScreenWidth * sizeof( cl_float3 ) );
-			mCamera = cl::Buffer( mOpenCLContext, CL_MEM_READ_ONLY, sizeof( Camera ) );
-			mQueue.finish();
-			mQueue.enqueueWriteBuffer( mCamera, CL_TRUE, 0, sizeof( Camera ), &mPerpectiveCamera );
-			mQueue.finish();
-			mQueue.enqueueWriteBuffer( mSpheresBuffer, CL_TRUE, 0, mNumSpheres * sizeof( Sphere ), mCPUSpheres );
-			mQueue.finish();
-			mQueue.enqueueWriteBuffer( mAccumBuffer, CL_TRUE, 0, mScreenHeight*mScreenWidth * sizeof( float3 ), pattern );
-			mQueue.finish();
-			//clEnqueueFillBuffer( mQueue(), mAccumBuffer(), &pattern, sizeof( pattern ), 0, mScreenHeight*mScreenWidth * sizeof( cl_float3 ), 0, NULL, NULL );
-			//mQueue.enqueueFillBuffer<unsigned char>( mAccumBuffer, 0, 0, mScreenHeight*mScreenWidth * sizeof( cl_float3 ) );
-			if ( mNumTriangles > 0 )
-			{
-				mTriangleBuffer = cl::Buffer( mOpenCLContext, CL_MEM_READ_ONLY, mNumTriangles * 3 * sizeof( float3 ) );
-				mQueue.finish();
-				mQueue.enqueueWriteBuffer( mTriangleBuffer, CL_TRUE, 0, mNumTriangles * 3 * sizeof( float3 ), mSceneData );
-				mQueue.finish();
-				delete[ ] mSceneData;
-			}
+			mRayBuffer	 = CLWBuffer<CLTypes::Ray>::Create( mOpenCLContext, CL_MEM_READ_WRITE, mScreenHeight * mScreenWidth );
+			mHitBuffer	 = CLWBuffer<CLTypes::Intersection>::Create( mOpenCLContext, CL_MEM_READ_WRITE, mScreenHeight * mScreenWidth );
+			mAccumBuffer = CLWBuffer<float3>::Create( mOpenCLContext, CL_MEM_READ_WRITE, mScreenHeight*mScreenWidth );
+			mCamera		 = CLWBuffer<Camera>::Create( mOpenCLContext, CL_MEM_READ_ONLY, 1 );
+			/***/
 
-			// Initialize camera here
+			UploadCamera();
 
-			mVertexBufferGL = cl::BufferGL( mOpenCLContext, CL_MEM_WRITE_ONLY, mVertexBufferObject );
+			ClearAccumBuffer();
+
+			/*{
+				cl_int err = CL_SUCCESS;
+				auto context  = cl::Context( mOpenCLContext );
+				cl::BufferGL( context, CL_MEM_WRITE_ONLY, mVertexBufferObject, &err );
+				if ( err != CL_SUCCESS ) std::cout << "Errooo";
+			}*/
+			mVertexBufferGL = CLWBuffer<float4>::CreateFromGLBuffer( mOpenCLContext, mVertexBufferObject, CL_MEM_WRITE_ONLY, mScreenHeight * mScreenWidth );
 			mVBOs.push_back( mVertexBufferGL );
-			mQueue.finish();
 
 			InitializeKernel();
 
@@ -87,9 +65,7 @@ namespace PetTracer
 		}
 
 		void Draw() override
-		{
-			mQueue.finish();
-			
+		{			
 			static int iteration = 1;
 			if ( mResetRender ) { iteration = 1; mResetRender = false; }
 
@@ -97,26 +73,21 @@ namespace PetTracer
 			if ( mPerpectiveCamera.IsDirty() )
 			{
 				mPerpectiveCamera.Clean();
-				mQueue.enqueueWriteBuffer( mCamera, CL_TRUE, 0, sizeof(Camera), &mPerpectiveCamera );
-				mQueue.finish();
+				UploadCamera();
 				ClearAccumBuffer();
 			}
 
 			if ( mResetRender ) { iteration = 1; mResetRender = false; }
 			int ran = rand();
 
-			mOpenCLKernel.setArg( 5, (unsigned int) ran );
-			mOpenCLKernel.setArg( 6,  iteration );
-			mOpenCLKernel.setArg( 8, rand() / RAND_MAX );
-			mOpenCLKernel.setArg( 9, rand() / RAND_MAX );
-			mQueue.finish();
+			mOpenCLKernel.SetArg( 3, (unsigned int) ran );
+			mOpenCLKernel.SetArg( 4,  iteration );
+			mOpenCLKernel.SetArg( 6, rand() / RAND_MAX );
+			mOpenCLKernel.SetArg( 7, rand() / RAND_MAX );
 
-			//mKPerspectiveCamera.setArg( 3, rand() );
+			mKPerspectiveCamera.SetArg( 3, rand() );
 			
 			if(mTrace)RunKernel();
-
-			glFinish();
-			mQueue.finish();
 			
 			iteration++;
 
@@ -139,9 +110,8 @@ namespace PetTracer
 		void OnShutdow() override
 		{
 			glFinish();
-			mQueue.finish();
+			mOpenCLContext.Finish( 0 );
 			glDeleteBuffers( 1, &mVertexBufferObject );
-			delete[ ] pattern;
 			delete mScene;
 		}
 
@@ -227,59 +197,63 @@ namespace PetTracer
 		// Clear the accumulation buffer
 		void ClearAccumBuffer()
 		{
-			// Wait for any work to finish
-			mQueue.finish();
-			// Fill the accumulation buffer with 0s
-			mQueue.enqueueWriteBuffer( mAccumBuffer, CL_TRUE, 0, mScreenHeight*mScreenWidth * sizeof( float3 ), pattern );
-			//clEnqueueFillBuffer( mQueue(), mAccumBuffer(), &pattern, sizeof( pattern ), 0, mScreenHeight*mScreenWidth * sizeof( cl_float3 ), 0, NULL, NULL );
-			//mQueue.enqueueFillBuffer( mAccumBuffer, 0, 0, mScreenWidth*mScreenHeight * sizeof( cl_float3 ) );
-			mQueue.finish();
+			// Fill accumulation buffer with zeros
+			float3* mappedAccumBuffer = nullptr;
+			mOpenCLContext.MapBuffer( 0, mAccumBuffer, CL_MAP_WRITE, &mappedAccumBuffer ).Wait();
+			memset( mappedAccumBuffer, 0, mScreenHeight * mScreenWidth * sizeof( float3 ) );
+			mOpenCLContext.UnmapBuffer( 0, mAccumBuffer, mappedAccumBuffer ).Wait();
+			
 			mResetRender = true;
+		}
+
+		void UploadCamera()
+		{
+			// Compy camera to GPU
+			Camera* mappedCamera = nullptr;
+			mOpenCLContext.MapBuffer( 0, mCamera, CL_MAP_WRITE, &mappedCamera ).Wait();
+			*mappedCamera = mPerpectiveCamera;
+			mOpenCLContext.UnmapBuffer( 0, mCamera, mappedCamera ).Wait();
 		}
 
 	private:
 		void InitializeKernel()
 		{
 			// Create the kernels from the opencl programs
-			mOpenCLKernel = cl::Kernel( mOpenCLProgram, "render_kernel" );
-			mKPerspectiveCamera = cl::Kernel( mPCamera, "PerspectiveCamera_GeneratePaths" );
-			mKIntersectScene = cl::Kernel( mPTracer, "IntersectClosest" );
+			mOpenCLKernel = mOpenCLProgram.GetKernel( "render_kernel" );
+
+			mKPerspectiveCamera = mPCamera.GetKernel( "PerspectiveCamera_GeneratePaths" );
+			mKIntersectScene    = mPTracer.GetKernel( "IntersectClosest" );
 
 			// Generate the base seed for the kernels
 			std::srand( static_cast<unsigned int>( time( 0 ) ) );
 			unsigned int seed = ( unsigned ) std::rand();
 
 			// Setup each kernel with its data
-			mOpenCLKernel.setArg( 0, mSpheresBuffer );
-			mOpenCLKernel.setArg( 1, mScreenWidth );
-			mOpenCLKernel.setArg( 2, mScreenHeight );
-			mOpenCLKernel.setArg( 3, mNumSpheres );
-			mOpenCLKernel.setArg( 4, mVertexBufferGL );
-			mOpenCLKernel.setArg( 5, seed );
-			mOpenCLKernel.setArg( 7, mRayBuffer );
-			mOpenCLKernel.setArg( 10, mAccumBuffer );
-			mOpenCLKernel.setArg( 11, *mScene->VerticesPositionBuffer() );
-			mOpenCLKernel.setArg( 12, *mScene->TriangleIndexBuffer() );
-			mOpenCLKernel.setArg( 13, *mScene->BVHNodeBuffer() );
+			mOpenCLKernel.SetArg( 0,  mScreenWidth );
+			mOpenCLKernel.SetArg( 1,  mScreenHeight );
+			mOpenCLKernel.SetArg( 2,  mVertexBufferGL );
+			mOpenCLKernel.SetArg( 3,  seed );
+			mOpenCLKernel.SetArg( 5,  mRayBuffer );
+			mOpenCLKernel.SetArg( 8,  mAccumBuffer );
+			mOpenCLKernel.SetArg( 9,  mScene->VerticesPositionBuffer() );
+			mOpenCLKernel.SetArg( 10, mScene->TriangleIndexBuffer() );
+			mOpenCLKernel.SetArg( 11, mScene->BVHNodeBuffer() );
 
-			mKPerspectiveCamera.setArg( 0, mCamera );
-			mKPerspectiveCamera.setArg( 1, mScreenWidth );
-			mKPerspectiveCamera.setArg( 2, mScreenHeight );
-			mKPerspectiveCamera.setArg( 3, seed );
-			mKPerspectiveCamera.setArg( 4, mRayBuffer );
+			mKPerspectiveCamera.SetArg( 0, mCamera );
+			mKPerspectiveCamera.SetArg( 1, mScreenWidth );
+			mKPerspectiveCamera.SetArg( 2, mScreenHeight );
+			mKPerspectiveCamera.SetArg( 3, seed );
+			mKPerspectiveCamera.SetArg( 4, mRayBuffer );
 
-			mKIntersectScene.setArg( 0, mSpheresBuffer );
-			mKIntersectScene.setArg( 1, mNumSpheres );
-			mKIntersectScene.setArg( 2, *mScene->VerticesPositionBuffer() );
-			mKIntersectScene.setArg( 3, *mScene->TriangleIndexBuffer() );
-			mKIntersectScene.setArg( 4, *mScene->BVHNodeBuffer() );
-			mKIntersectScene.setArg( 5, mRayBuffer );
-			mKIntersectScene.setArg( 6, ( unsigned int ) mScreenWidth * mScreenHeight );
-			mKIntersectScene.setArg( 7, mHitBuffer );
-			mKIntersectScene.setArg( 8, mVertexBufferGL );
-			mKIntersectScene.setArg( 9, mScreenWidth );
-			mKIntersectScene.setArg( 10, mScreenHeight );
-			mQueue.finish();
+			mKIntersectScene.SetArg( 0, mScene->VerticesPositionBuffer() );
+			mKIntersectScene.SetArg( 1, mScene->TriangleIndexBuffer() );
+			mKIntersectScene.SetArg( 2, mScene->BVHNodeBuffer() );
+			mKIntersectScene.SetArg( 3, mRayBuffer );
+			mKIntersectScene.SetArg( 4, ( unsigned int ) mScreenWidth * mScreenHeight );
+			mKIntersectScene.SetArg( 5, mHitBuffer );
+			mKIntersectScene.SetArg( 6, mVertexBufferGL );
+			mKIntersectScene.SetArg( 7, mScreenWidth );
+			mKIntersectScene.SetArg( 8, mScreenHeight );
 		}
 
 		void RunKernel()
@@ -308,17 +282,14 @@ namespace PetTracer
 											 // Ensure the global work size is a multiple of local work size
 			if ( global_work_size % local_work_size != 0 )
 				global_work_size = ( ( global_work_size ) / local_work_size + 1 ) * local_work_size;
-			//std::cout << mScreenWidth * mScreenHeight << " - " << global_work_size << std::endl;
 
-
-			mQueue.enqueueNDRangeKernel( mKPerspectiveCamera, NULL, global_work_size, local_work_size ); // local_work_size
-			mQueue.finish();
+			mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, mKPerspectiveCamera );
 
 			//Make sure OpenGL is done using the VBOs
 			glFinish();
 
 			//this passes in the vector of VBO buffer objects 
-			mQueue.enqueueAcquireGLObjects( &mVBOs );
+			mOpenCLContext.AcquireGLObjects( 0, mVBOs );
 
 			local_work_size = 64;
 			if ( global_work_size % local_work_size != 0 )
@@ -326,12 +297,13 @@ namespace PetTracer
 			
 
 			// launch the kernel
-			//mQueue.enqueueNDRangeKernel( mKIntersectScene, NULL, global_work_size, 64 ); // local_work_size
-			mQueue.enqueueNDRangeKernel( mOpenCLKernel, NULL, global_work_size, local_work_size ); // local_work_size
+			/*for ( int32 i = 0; i < 5; i++) */mOpenCLContext.Launch1D( 0, global_work_size, 64, mKIntersectScene ); // local_work_size
+			mOpenCLContext.Launch1D( 0, global_work_size, 64, mOpenCLKernel );
+			//mQueue.enqueueNDRangeKernel( mOpenCLKernel, NULL, global_work_size, local_work_size ); // local_work_size
 
 																								   //Release the VBOs so OpenGL can play with them
-			mQueue.enqueueReleaseGLObjects( &mVBOs );
-			mQueue.finish();
+			mOpenCLContext.ReleaseGLObjects( 0, mVBOs );
+			mOpenCLContext.Finish( 0 );
 		}
 
 		bool CreateProgram()
@@ -355,7 +327,7 @@ namespace PetTracer
 			glBindBuffer( GL_ARRAY_BUFFER, 0 );
 		}
 
-		void InitScene( Sphere* spheres )
+		void InitScene()
 		{
 			// Set up camera
 			mPerpectiveCamera.SetSensorSize( float2( ( float ) mScreenWidth / mScreenHeight, 1.0f ) * 0.0359999985f );
@@ -364,7 +336,7 @@ namespace PetTracer
 			{
 				std::cout << std::endl << "Opening Scene" << std::endl;
 				Timer<milliseconds> timer;
-				mScene = new Scene ( mOpenCLContext, "../../../data/orig2.obj", &mQueue );
+				mScene = new Scene ( mOpenCLContext, "../../../data/orig.obj" );
 				std::cout << "Scene opened: " << timer.ElapsedTime() << "ms elapsed." << std::endl;
 				BuildParams params;
 				params.MaxLeafSize = 1;
@@ -386,80 +358,6 @@ namespace PetTracer
 				mScene->UploadScene( true );
 				std::cout << "BVH Translated: " << timer.ElapsedTime() << "ms elapsed." << std::endl;*/
 			}
-
-
-			// Load and preprocess the obj file
-			std::vector<tinyobj::shape_t> shapes;
-			std::vector<tinyobj::material_t> materials;
-			std::string err = "";
-
-			mSceneData = NULL;
-			mNumTriangles = 0;
-
-			// Try to open the file
-
-			// left wall
-			spheres[0].radius	= 200.0f;
-			spheres[0].position = { -200.6f, 0.0f, 0.0f, 0.0f };
-			spheres[0].color    = { 0.75f, 0.25f, 0.25f };
-			spheres[0].emission = { 0.0f, 0.0f, 0.0f };
-			spheres[0].reflectionType = DIFF;
-
-			// right wall
-			spheres[1].radius	= 200.0f;
-			spheres[1].position = { 200.6f, 0.0f, 0.0f };
-			spheres[1].color    = { 0.25f, 0.25f, 0.25f }; // floor
-			spheres[1].emission = { 0.0f, 0.0f, 0.0f };
-			spheres[1].reflectionType = DIFF;
-
-			// floor
-			spheres[2].radius	= 200.0f;
-			spheres[2].position = { 0.0f, -200.4f, 0.0f };
-			spheres[2].color	= { 0.75f, 0.75f, 0.75f }; //Suzane
-			spheres[2].emission = { 0.0f, 0.0f, 0.0f };
-			spheres[2].reflectionType = DIFF;
-
-			// ceiling
-			spheres[3].radius	= 200.0f;
-			spheres[3].position = { 0.0f, 200.4f, 0.0f };
-			spheres[3].color	= { 0.75f, 0.75f, 0.75f }; // front wall
-			spheres[3].emission = { 0.0f, 0.0f, 0.0f };
-			spheres[3].reflectionType = DIFF;
-
-			// back wall
-			spheres[4].radius   = 200.0f;
-			spheres[4].position = { 0.0f, 0.0f, -200.4f };
-			spheres[4].color    = { 0.75f, 0.75f, 0.75f }; // Celling
-			spheres[4].emission = { 0.0f, 0.0f, 0.0f };
-			spheres[4].reflectionType = DIFF;
-
-			// front wall 
-			spheres[5].radius   = 200.0f;
-			spheres[5].position = { 0.0f, 0.0f, 202.0f };
-			spheres[5].color    = { 0.25f, 0.75f, 0.25f }; // right wall
-			spheres[5].emission = { 0.0f, 0.0f, 0.0f };
-			spheres[5].reflectionType = DIFF;
-
-			// left sphere
-			spheres[6].radius   = 0.16f;
-			spheres[6].position = { -0.25f, -0.24f, -0.1f };
-			spheres[6].color    = { 0.75f, 0.0f, 0.0f };
-			spheres[6].emission = { 0.0f, 0.0f, 0.0f };
-			spheres[6].reflectionType = DIFF;
-
-			// right sphere
-			spheres[7].radius   = 0.16f;
-			spheres[7].position = { 0.25f, -0.24f, 0.1f };
-			spheres[7].color    = { 1.0f, 1.0f, 1.0f };
-			spheres[7].emission = { 0.0f, 0.0f, 0.0f };
-			spheres[7].reflectionType = SPEC;
-
-			// lightsource
-			spheres[8].radius   = 1.0f;
-			spheres[8].position = { 0.0f, 2.36f, 0.0f };
-			spheres[8].color    = { 0.0f, 75.0f, 0.0f };
-			spheres[8].emission = { 24.0f, 24.0f, 24.0f };
-			spheres[8].reflectionType = DIFF;
 		}
 
 		void ReadSourceFile( const std::string& path, std::string& source )
@@ -481,65 +379,41 @@ namespace PetTracer
 			}
 		}
 
-		bool CreateProgram( const std::string& path, cl::Program& program )
+		bool CreateProgram( const std::string& path, CLWProgram& program )
 		{
 			std::string source;
 			ReadSourceFile( path, source );
 
 			// Create OpenCL program from source
-			program = cl::Program( mOpenCLContext, source.c_str() );
-
-			// Build the program for the selected device
-			cl_int result = program.build( { mOpenCLDevice }, " -I../../../src/kernels/CL -cl-fast-relaxed-math -DMAC" );
-			{
-				std::string buildLog = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>( mOpenCLDevice );
-				std::string logFileName = path + ".buildlog.txt";
-				FILE* log;
-				fopen_s( &log, logFileName.c_str(), "w" );
-				fprintf_s( log, "%s\n", buildLog.c_str() );
-				fclose( log );
-			}
-			if ( result ) std::cout << "ERROR during compilation of: " << path << " (" << result << ") " << std::endl;
-			if ( result == CL_BUILD_PROGRAM_FAILURE )
-			{
-				system( "pause" );
-				return false;
-			}
+			std::vector<char> sourceCode( source.begin(), source.end() );
+			program = mOpenCLContext.CreateProgram( sourceCode, " -I../../../src/kernels/CL -cl-fast-relaxed-math -DMAC" );
 
 			return true;
 		}
 
 	private:
-		cl::Program		mOpenCLProgram;
+		CLWProgram		mOpenCLProgram;
 
 		// OpenCL programs
-		cl::Program		mPCamera;
-		cl::Program		mPTracer;
+		CLWProgram		mPCamera;
+		CLWProgram		mPTracer;
 
 		// OpenCL kernels
-		cl::Kernel		mKPerspectiveCamera;
-		cl::Kernel		mKIntersectScene;
+		CLWKernel		mKPerspectiveCamera;
+		CLWKernel		mKIntersectScene;
 
 
-		cl::Kernel		mOpenCLKernel;
-		cl::Buffer		mSpheresBuffer;
-		cl::Buffer		mTriangleBuffer;
-		cl::Buffer		mRayBuffer;
-		cl::Buffer		mHitBuffer;
-		cl::Buffer		mCamera;
-		cl::Buffer		mAccumBuffer;
+		CLWKernel							mOpenCLKernel;
+		CLWBuffer<CLTypes::Ray>				mRayBuffer;
+		CLWBuffer<CLTypes::Intersection>	mHitBuffer;
+		CLWBuffer<Camera>					mCamera;
+		CLWBuffer<float3>					mAccumBuffer;
 
-		cl::BufferGL	mVertexBufferGL;
-		std::vector<cl::Memory> mVBOs;
+		CLWBuffer<float4>					mVertexBufferGL;
+		//cl::BufferGL	mVertexBufferGL;
+		std::vector<cl_mem>					mVBOs;
+		GLuint								mVertexBufferObject;
 
-		GLuint			mVertexBufferObject;
-
-		unsigned int mNumTriangles;
-		float3 *mSceneData = NULL;
-		float3 *pattern = NULL;
-
-		static const int mNumSpheres = 9;
-		Sphere mCPUSpheres[mNumSpheres];
 		Camera mPerpectiveCamera;
 
 		Scene* mScene;

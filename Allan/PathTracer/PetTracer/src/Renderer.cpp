@@ -136,24 +136,27 @@ namespace PetTracer
 	bool Renderer::InitializeOpenCL()
 	{
 		// Find all available OpenCL platforms
-		std::vector<cl::Platform> platforms;
-		std::vector<cl::Device> devices;
+		std::vector<CLWPlatform> platforms;
+		//std::vector<cl::Device> devices;
 
+		CLWPlatform::CreateAllPlatforms( platforms );
 
-		cl::Platform::get( &platforms );
+		if ( platforms.size() < 1 )
+		{
+			std::cout << "OpenCL not supported" << std::endl;
+		}
 
 		// Show the names of all available OpenCL platform and its devices
 		std::cout << "Available OpenCL platforms: " << std::endl << std::endl;
 		for ( unsigned int i = 0; i < platforms.size(); i++ )
 		{
-			devices.clear();
-			platforms[i].getDevices( CL_DEVICE_TYPE_ALL, &devices );
-			std::cout << "\t" << i + 1 << ": " << platforms[i].getInfo<CL_PLATFORM_NAME>() << std::endl;
-			for ( unsigned int j = 0; j < devices.size(); j++ )
+			//platforms[i].getDevices( CL_DEVICE_TYPE_ALL, &devices );
+			std::cout << "\t" << i + 1 << ": " << platforms[i].GetName() << std::endl;
+			for ( unsigned int j = 0; j < platforms[i].GetDeviceCount(); j++ )
 			{
-				std::cout << "\t\t" << j + 1 << ": " << devices[j].getInfo<CL_DEVICE_NAME>() << std::endl;
-				std::cout << "\t\t\tMax compute units: "  << devices[j].getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
-				std::cout << "\t\t\tMax work group size: " << devices[j].getInfo<CL_DEVICE_MAX_WORK_GROUP_SIZE>() << std::endl;
+				std::cout << "\t\t" << j + 1 << ": " << platforms[i].GetDevice(j).GetName() << std::endl;
+				//std::cout << "\t\t\tMax compute units: " << platforms[i].GetDevice( j ).devices[j].getInfo<CL_DEVICE_MAX_COMPUTE_UNITS>() << std::endl;
+				std::cout << "\t\t\tMax work group size: " << platforms[i].GetDevice( j ).GetMaxWorkGroupSize() << std::endl;
 			}
 			std::cout << std::endl;
 
@@ -165,53 +168,50 @@ namespace PetTracer
 		unsigned int deviceIdx = -1;
 		for ( unsigned int i = 0; i < platforms.size(); i++ )
 		{
-			mOpenCLPlatform = platforms[i];
-			devices.clear();
-			mOpenCLPlatform.getDevices( CL_DEVICE_TYPE_ALL, &devices );
+			CLWPlatform& Platform = platforms[i];
 
-			for ( unsigned int j = 0; j < devices.size(); j++ )
+			for ( unsigned int j = 0; j < Platform.GetDeviceCount(); j++ )
 			{
-				mOpenCLDevice = devices[j];
-				if ( mOpenCLDevice.getInfo<CL_DEVICE_TYPE>() == CL_DEVICE_TYPE_CPU ) continue;
+				mOpenCLDevice = Platform.GetDevice(j);
+				// Ignore CPU, acuse false GL interop
+				if ( mOpenCLDevice.GetType() == CL_DEVICE_TYPE_CPU ) continue;
 
-				// Try to create the context with that device
-				cl_context_properties properties[ ] =
+				if ( mOpenCLDevice.HasGlInterop() )
 				{
-				#if defined(_WIN32)
-					CL_GL_CONTEXT_KHR, ( cl_context_properties ) wglGetCurrentContext(),
-					CL_WGL_HDC_KHR, ( cl_context_properties ) wglGetCurrentDC(),
+					// Try to create the context with that device
+					cl_context_properties properties[ ] =
+					{
+					#if defined(_WIN32)
+						CL_GL_CONTEXT_KHR, ( cl_context_properties ) wglGetCurrentContext(),
+						CL_WGL_HDC_KHR, ( cl_context_properties ) wglGetCurrentDC(),
 
-				#elif defined(UNIX)
-					CL_GL_CONTEXT_KHR, ( cl_context_properties ) glXGetCurrentContext(),
-					CL_GLX_DISPLAY_KHR, ( cl_context_properties ) glXGetCurrentDisplay(),
-				#endif
+					#elif defined(UNIX)
+						CL_GL_CONTEXT_KHR, ( cl_context_properties ) glXGetCurrentContext(),
+						CL_GLX_DISPLAY_KHR, ( cl_context_properties ) glXGetCurrentDisplay(),
+					#endif
 
-					CL_CONTEXT_PLATFORM, ( cl_context_properties ) mOpenCLPlatform(),
-					0
-				};
+						CL_CONTEXT_PLATFORM, ( cl_context_properties ) ( cl_platform_id ) Platform,
+						0
+					};
 
-				// Create an OpenCL context on that device.
-				// the context manages all the OpenCL resources
-				cl_int err = 0;
-				mOpenCLContext = cl::Context( mOpenCLDevice, properties, NULL, NULL, &err);
-				
-				// If there is no error, exit the loop
-				if ( err == CL_SUCCESS )
-				{
+					// Create an OpenCL context on that device.
+					// the context manages all the OpenCL resources
+					mOpenCLContext = CLWContext::Create( mOpenCLDevice, properties );
 					platformIdx = i;
 					deviceIdx = j;
 					break;
+
 				}
 			}
 			if ( platformIdx != -1 ) break;
 		}
 
-		// Print the name of the chosen OpenCL platform
-		std::cout << "Using OpenCL platform:  " << mOpenCLPlatform.getInfo<CL_PLATFORM_NAME>() << std::endl;
-		// Print the name of the chosen device
-		std::cout << "Using OpenCL device:    " << mOpenCLDevice.getInfo<CL_DEVICE_NAME>() << std::endl << std::endl << std::endl;
+		if ( platformIdx == -1 ) return false;
 
-		mQueue = cl::CommandQueue( mOpenCLContext, mOpenCLDevice );
+		// Print the name of the chosen OpenCL platform
+		std::cout << "Using OpenCL platform:  " << platforms[platformIdx].GetName() << std::endl;
+		// Print the name of the chosen device
+		std::cout << "Using OpenCL device:    " << mOpenCLDevice.GetName() << std::endl << std::endl << std::endl;
 
 		return true;
 	}

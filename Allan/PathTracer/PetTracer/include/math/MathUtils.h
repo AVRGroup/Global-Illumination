@@ -9,7 +9,6 @@
 #undef max
 #endif
 
-#include <CL/cl.h>
 #include <cmath>
 
 #include "float2.h"
@@ -255,31 +254,6 @@ namespace PetTracer
 		float4 mMin;
 		float4 mMax;
 	};
-
-	/*class AABB
-	{
-	public:
-		AABB( void ) : m_mn( FLT_MAX, FLT_MAX, FLT_MAX ), m_mx( -FLT_MAX, -FLT_MAX, -FLT_MAX ) { }
-		AABB( const float3& mn, const float3& mx ) : m_mn( mn ), m_mx( mx ) { }
-
-		void            grow( const float3& pt ) { m_mn = min( m_mn, pt ); m_mx = m_mx.max( pt ); }
-		void            grow( const AABB& aabb ) { grow( aabb.m_mn ); grow( aabb.m_mx ); }
-		void            intersect( const AABB& aabb ) { m_mn = m_mn.max( aabb.m_mn ); m_mx = m_mx.min( aabb.m_mx ); }
-		float           volume( void ) const { if ( !valid() ) return 0.0f; return ( m_mx.x - m_mn.x ) * ( m_mx.y - m_mn.y ) * ( m_mx.z - m_mn.z ); }
-		float           area( void ) const { if ( !valid() ) return 0.0f; float3 d = m_mx - m_mn; return ( d.x*d.y + d.y*d.z + d.z*d.x )*2.0f; }
-		bool            valid( void ) const { return m_mn.x <= m_mx.x && m_mn.y <= m_mx.y && m_mn.z <= m_mx.z; }
-		float3           midPoint( void ) const { return ( m_mn + m_mx )*0.5f; }
-		const float3&    min( void ) const { return m_mn; }
-		const float3&    max( void ) const { return m_mx; }
-		float3&          min( void ) { return m_mn; }
-		float3&          max( void ) { return m_mx; }
-
-		    AABB            operator+   ( const AABB& aabb ) const { AABB u( *this ); u.grow( aabb ); return u; }
-
-	private:
-		float3           m_mn;
-		float3           m_mx;
-	};*/
 }
 
 #endif // MATH_UTILS_H

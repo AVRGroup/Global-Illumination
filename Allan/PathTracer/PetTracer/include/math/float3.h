@@ -3,7 +3,6 @@
 #ifndef FLOAT3_H
 #define FLOAT3_H
 
-#include <CL/cl.h>
 #include <cmath>
 #include <iostream>
 
@@ -40,7 +39,7 @@ namespace PetTracer
 		// Mimic OpenCL cl_float4 alingment
 		union
 		{
-			T CL_ALIGNED( 16 ) s[4];
+			alignas( 16 ) T s[4];
 			struct { T x, y, z, w; };
 			struct { T s0, s1, s2, s3; };
 		};

@@ -3,8 +3,6 @@
 #include "math/MathUtils.h"
 #include "../Buffer.h"
 
-#include <CL/cl.hpp>
-
 namespace PetTracer
 {
 	class BVH;
@@ -13,8 +11,8 @@ namespace PetTracer
 	class Scene
 	{
 	public:
-		Scene( cl::Context const& context, cl::CommandQueue* queue = NULL );
-		Scene( cl::Context const& context, const char* filePath, cl::CommandQueue* queue = NULL, bool uploadScene = false );
+		Scene( CLWContext const& context );
+		Scene( CLWContext const& context, const char* filePath, bool uploadScene = false );
 		~Scene();
 
 		inline int4   const * TrianglesIndexesPtr() { return mTrianglesIndexes.GetPointer(); }
@@ -24,17 +22,17 @@ namespace PetTracer
 		inline uint32 VertexCount() const { return mVertexCount; }
 
 		bool OpenFile( const char* filePath, bool UploadToGPU = true );
-		void UploadScene(bool block = true, cl::CommandQueue* queue = NULL);
+		void UploadScene( bool block = true );
 
 		void BuildBVH( BuildParams const& params );
 		void UpdateBVH( BVH const& bvh );
 		void LoadBVHFromFile( const char* filename );
 
-		cl::Buffer* TriangleIndexBuffer()		{ return mTrianglesIndexes.CLBuffer(); }
-		cl::Buffer* VerticesPositionBuffer()	{ return mVerticesPosition.CLBuffer(); }
-		cl::Buffer* VerticesNormalBuffer()		{ return mVerticesNormal.CLBuffer(); }
-		cl::Buffer* VerticesTexCoordBufer()		{ return mVerticesTexCoord.CLBuffer(); }
-		cl::Buffer* BVHNodeBuffer()				{ return mBVHNodes.CLBuffer(); }
+		CLWBuffer<int3>& TriangleIndexBuffer()		{ return mTrianglesIndexes.CLBuffer(); }
+		CLWBuffer<float3>& VerticesPositionBuffer()	{ return mVerticesPosition.CLBuffer(); }
+		CLWBuffer<float3>& VerticesNormalBuffer()		{ return mVerticesNormal.CLBuffer(); }
+		CLWBuffer<float3>& VerticesTexCoordBufer()		{ return mVerticesTexCoord.CLBuffer(); }
+		CLWBuffer<AABB>& BVHNodeBuffer()				{ return mBVHNodes.CLBuffer(); }
 
 	private:
 		std::string		BVHFileName();
@@ -51,8 +49,7 @@ namespace PetTracer
 		Buffer<float4>	mVerticesTexCoord;
 		Buffer<AABB>	mBVHNodes;
 		// OpenCL context
-		cl::Context const&	mOpenCLContext;
-		cl::CommandQueue*	mQueue;
+		CLWContext const&	mOpenCLContext;
 
 		std::string		mScenePath;
 

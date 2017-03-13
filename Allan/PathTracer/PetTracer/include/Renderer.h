@@ -5,11 +5,12 @@
 #ifndef PETTRACER_RENDERER_H
 #define PETTRACER_RENDERER_H
 
+#include <CLW.h>
 #include <glad/glad.h>
 #include <SDL.h>
 #include <SDL_opengl.h>
 
-#include <CL/cl.hpp>
+//#include <CL/cl.hpp>
 
 #include <string>
 
@@ -64,10 +65,13 @@ namespace PetTracer
 		unsigned int		mScreenWidth;
 		unsigned int		mScreenHeight;
 
-		cl::Platform		mOpenCLPlatform;
-		cl::Device			mOpenCLDevice;
-		cl::Context			mOpenCLContext;
-		cl::CommandQueue	mQueue;
+		
+		CLWDevice			mOpenCLDevice;
+		CLWContext			mOpenCLContext;
+		//cl::Platform		mOpenCLPlatform;
+		//cl::Device		mOpenCLDevice;
+		//cl::Context		mOpenCLContext;
+		//cl::CommandQueue	mQueue;
 
 		bool				mRunning;
 		bool				mTrace;

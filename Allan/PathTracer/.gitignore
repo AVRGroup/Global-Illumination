@@ -35,8 +35,10 @@
 *.ipdb
 *.pdb
 *.suo
+*.ilk
+*.bvh
 
 !teste.obj
 
-PetTracer/obj/
+*/obj/
 !PetTracer.exe

@@ -1,30 +1,3 @@
-/*
-*  Copyright (c) 2009-2011, NVIDIA Corporation
-*  All rights reserved.
-*
-*  Redistribution and use in source and binary forms, with or without
-*  modification, are permitted provided that the following conditions are met:
-*      * Redistributions of source code must retain the above copyright
-*        notice, this list of conditions and the following disclaimer.
-*      * Redistributions in binary form must reproduce the above copyright
-*        notice, this list of conditions and the following disclaimer in the
-*        documentation and/or other materials provided with the distribution.
-*      * Neither the name of NVIDIA Corporation nor the
-*        names of its contributors may be used to endorse or promote products
-*        derived from this software without specific prior written permission.
-*
-*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-*  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-*  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-*  DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
-*  DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-*  (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-*  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-*  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-*  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-
 #include "SplitBVHBuilder.h"
 
 using namespace PetTracer;
@@ -34,10 +7,10 @@ SplitBVHBuilder* SplitBVHBuilder::sPointer = NULL;
 //------------------------------------------------------------------------
 
 SplitBVHBuilder::SplitBVHBuilder( BVH& bvh, const BuildParams& params )
-	: m_bvh( bvh ),
-	m_params( params ),
-	m_minOverlap( 0.0f ),
-	m_sortDim( -1 )
+	: mBVH( bvh ),
+	mParams( params ),
+	mMinOverlap( 0.0f ),
+	mSortDim( -1 )
 {
 }
 
@@ -53,39 +26,39 @@ BVHNode* SplitBVHBuilder::Run( void )
 {
 	// Initialize reference stack and determine root bounds.
 
-	const int3* tris = ( const int3* ) m_bvh.GetScene().TrianglesIndexesPtr();
-	const float4* verts = ( const float3* ) m_bvh.GetScene().VerticesPositionPtr();
+	const int3* tris = ( const int3* ) mBVH.GetScene().TrianglesIndexesPtr();
+	const float4* verts = ( const float3* ) mBVH.GetScene().VerticesPositionPtr();
 
 	NodeSpec rootSpec;
-	rootSpec.numRef = m_bvh.GetScene().TriangleCount();
-	m_refStack.resize( rootSpec.numRef );
+	rootSpec.numRef = mBVH.GetScene().TriangleCount();
+	mReferenceStack.resize( rootSpec.numRef );
 
 	for ( int32 i = 0; i < rootSpec.numRef; i++ )
 	{
-		m_refStack[i].triIdx = i;
+		mReferenceStack[i].triIdx = i;
 		for ( int32 j = 0; j < 3; j++ )
-			m_refStack[i].bounds.Grow( verts[tris[i][j]] );
-		rootSpec.bounds.Grow( m_refStack[i].bounds );
+			mReferenceStack[i].bounds.Grow( verts[tris[i][j]] );
+		rootSpec.bounds.Grow( mReferenceStack[i].bounds );
 	}
 
 	// Initialize rest of the members.
 
-	m_minOverlap = rootSpec.bounds.Area() * m_params.SplitAlpha;
-	m_rightBounds.clear();
-	m_rightBounds.resize( max( rootSpec.numRef, ( int32 ) NumSpatialBins ) - 1 );
-	m_numDuplicates = 0;
-	m_progressTimer.Start();
+	mMinOverlap = rootSpec.bounds.Area() * mParams.SplitAlpha;
+	mRightBounds.clear();
+	mRightBounds.resize( max( rootSpec.numRef, ( int32 ) NumSpatialBins ) - 1 );
+	mNumDuplicates = 0;
+	mProgressTimer.Start();
 
 	// Build recursively.
 	sPointer = this;
 	BVHNode* root = buildNode( rootSpec, 0, 0.0f, 1.0f );
-	m_bvh.TriangleIndices().shrink_to_fit();
+	mBVH.TriangleIndices().shrink_to_fit();
 
 	// Done.
 
-	if ( m_params.EnablePrints )
+	if ( mParams.EnablePrints )
 		printf( "SplitBVHBuilder: progress %.0f%%, duplicates %.0f%%\n",
-			100.0f, ( float ) m_numDuplicates / ( float ) m_bvh.GetScene().TriangleCount() * 100.0f );
+			100.0f, ( float ) mNumDuplicates / ( float ) mBVH.GetScene().TriangleCount() * 100.0f );
 	return root;
 }
 
@@ -93,7 +66,7 @@ BVHNode* SplitBVHBuilder::Run( void )
 
 int SplitBVHBuilder::sortCompare( const void* a, const void* b )
 {
-	int32 dim = sPointer->m_sortDim;
+	int32 dim = sPointer->mSortDim;
 	const Reference& ra = *((Reference*)a);
 	const Reference& rb = *((Reference*)b);
 	float ca = ra.bounds.Min()[dim] + ra.bounds.Max()[dim];
@@ -106,7 +79,7 @@ int SplitBVHBuilder::sortCompare( const void* a, const void* b )
 void SplitBVHBuilder::sortSwap( void* data, int32 idxA, int32 idxB )
 {
 	SplitBVHBuilder* ptr = ( SplitBVHBuilder* ) data;
-	Swap( ptr->m_refStack[idxA], ptr->m_refStack[idxB] );
+	Swap( ptr->mReferenceStack[idxA], ptr->mReferenceStack[idxB] );
 }
 
 //------------------------------------------------------------------------
@@ -115,41 +88,41 @@ BVHNode* SplitBVHBuilder::buildNode( NodeSpec spec, int32 level, float progressS
 {
 	// Display progress.
 
-	if ( m_params.EnablePrints && m_progressTimer.ElapsedTime() >= 1.0f )
+	if ( mParams.EnablePrints && mProgressTimer.ElapsedTime() >= 1.0f )
 	{
 		printf( "SplitBVHBuilder: progress %.0f%%, duplicates %.0f%%\r",
-			progressStart * 100.0f, ( float ) m_numDuplicates / ( float ) m_bvh.GetScene().TriangleCount() * 100.0f );
-		m_progressTimer.Start();
+			progressStart * 100.0f, ( float ) mNumDuplicates / ( float ) mBVH.GetScene().TriangleCount() * 100.0f );
+		mProgressTimer.Start();
 	}
 
-	m_bvh.NodeCount()++;
+	mBVH.NodeCount()++;
 
 	// Remove degenerates.
 	{
-		int32 firstRef = static_cast<int32>(m_refStack.size() - spec.numRef);
-		for ( uint64 i = m_refStack.size() - 1; i > firstRef; i-- )
+		int32 firstRef = static_cast<int32>(mReferenceStack.size() - spec.numRef);
+		for ( uint64 i = mReferenceStack.size() - 1; i > firstRef; i-- )
 		{
-			float3 size = m_refStack[i].bounds.Max() - m_refStack[i].bounds.Min();
+			float3 size = mReferenceStack[i].bounds.Max() - mReferenceStack[i].bounds.Min();
 			if ( min( size ) < 0.0f || sum( size ) == max( size ) )
 			{
-				auto old = m_refStack[i];
-				m_refStack[i] = m_refStack[m_refStack.size() - 1];
-				m_refStack.pop_back();
+				auto old = mReferenceStack[i];
+				mReferenceStack[i] = mReferenceStack[mReferenceStack.size() - 1];
+				mReferenceStack.pop_back();
 			}
 		}
-		spec.numRef =  static_cast<int32>( m_refStack.size() - firstRef );
+		spec.numRef =  static_cast<int32>( mReferenceStack.size() - firstRef );
 	}
 
 	// Small enough or too deep => create leaf.
 
-	if ( spec.numRef <= m_params.MinLeafSize || level >= MaxDepth )
+	if ( spec.numRef <= mParams.MinLeafSize || level >= MaxDepth )
 		return createLeaf( spec );
 
 	// Find split candidates.
 
 	float area = spec.bounds.Area();
-	float leafSAH = area * m_params.TriangleCost( spec.numRef );
-	float nodeSAH = area * m_params.NodeCost( 2 );
+	float leafSAH = area * mParams.TriangleCost( spec.numRef );
+	float nodeSAH = area * mParams.NodeCost( 2 );
 	ObjectSplit object = findObjectSplit( spec, nodeSAH );
 
 	SpatialSplit spatial;
@@ -157,14 +130,14 @@ BVHNode* SplitBVHBuilder::buildNode( NodeSpec spec, int32 level, float progressS
 	{
 		AABB overlap = object.leftBounds;
 		overlap.Intersect( object.rightBounds );
-		if ( overlap.Area() >= m_minOverlap )
+		if ( overlap.Area() >= mMinOverlap )
 			spatial = findSpatialSplit( spec, nodeSAH );
 	}
 
 	// Leaf SAH is the lowest => create leaf.
 
 	float minSAH = min( leafSAH, object.sah, spatial.sah );
-	if ( minSAH == leafSAH && spec.numRef <= m_params.MaxLeafSize )
+	if ( minSAH == leafSAH && spec.numRef <= mParams.MaxLeafSize )
 		return createLeaf( spec );
 
 	// Perform split.
@@ -177,7 +150,7 @@ BVHNode* SplitBVHBuilder::buildNode( NodeSpec spec, int32 level, float progressS
 
 	// Create inner node.
 
-	m_numDuplicates += left.numRef + right.numRef - spec.numRef;
+	mNumDuplicates += left.numRef + right.numRef - spec.numRef;
 	float progressMid = lerp( progressStart, progressEnd, ( float ) right.numRef / ( float ) ( left.numRef + right.numRef ) );
 	BVHNode* rightNode = buildNode( right, level + 1, progressStart, progressMid );
 	BVHNode* leftNode = buildNode( left, level + 1, progressMid, progressEnd );
@@ -188,11 +161,11 @@ BVHNode* SplitBVHBuilder::buildNode( NodeSpec spec, int32 level, float progressS
 
 BVHNode* SplitBVHBuilder::createLeaf( const NodeSpec& spec )
 {
-	std::vector<int32>& tris = m_bvh.TriangleIndices();
+	std::vector<int32>& tris = mBVH.TriangleIndices();
 	for ( int32 i = 0; i < spec.numRef; i++ )
 	{
-		tris.push_back( m_refStack[m_refStack.size()-1].triIdx );
-		m_refStack.pop_back();
+		tris.push_back( mReferenceStack[mReferenceStack.size()-1].triIdx );
+		mReferenceStack.pop_back();
 	}
 	//return new LeafNode( spec.bounds, (int32)tris.size() - spec.numRef, (int32)tris.size() );
 	return new LeafNode( spec.bounds, tris[tris.size() - spec.numRef], 1 );
@@ -203,15 +176,15 @@ BVHNode* SplitBVHBuilder::createLeaf( const NodeSpec& spec )
 SplitBVHBuilder::ObjectSplit SplitBVHBuilder::findObjectSplit( const NodeSpec& spec, float nodeSAH )
 {
 	ObjectSplit split;
-	const Reference* refPtr = &m_refStack[ m_refStack.size() - spec.numRef ];
+	const Reference* refPtr = &mReferenceStack[ mReferenceStack.size() - spec.numRef ];
 	float bestTieBreak = FLT_MAX;
 
 	// Sort along each dimension.
 
-	for ( m_sortDim = 0; m_sortDim < 3; m_sortDim++ )
+	for ( mSortDim = 0; mSortDim < 3; mSortDim++ )
 	{
-		std::qsort( &m_refStack[m_refStack.size() - spec.numRef], spec.numRef, sizeof( SplitBVHBuilder::Reference ), sortCompare );
-		//sort( this, m_refStack.size() - spec.numRef, m_refStack.size(), sortCompare, sortSwap );
+		std::qsort( &mReferenceStack[mReferenceStack.size() - spec.numRef], spec.numRef, sizeof( SplitBVHBuilder::Reference ), sortCompare );
+		//sort( this, mReferenceStack.size() - spec.numRef, mReferenceStack.size(), sortCompare, sortSwap );
 
 		// Sweep right to left and determine bounds.
 
@@ -219,7 +192,7 @@ SplitBVHBuilder::ObjectSplit SplitBVHBuilder::findObjectSplit( const NodeSpec& s
 		for ( int32 i = spec.numRef - 1; i > 0; i-- )
 		{
 			rightBounds.Grow( refPtr[i].bounds );
-			m_rightBounds[i - 1] = rightBounds;
+			mRightBounds[i - 1] = rightBounds;
 		}
 
 		// Sweep left to right and select lowest SAH.
@@ -228,15 +201,15 @@ SplitBVHBuilder::ObjectSplit SplitBVHBuilder::findObjectSplit( const NodeSpec& s
 		for ( int32 i = 1; i < spec.numRef; i++ )
 		{
 			leftBounds.Grow( refPtr[i - 1].bounds );
-			float sah = nodeSAH + leftBounds.Area() * m_params.TriangleCost( i ) + m_rightBounds[i - 1].Area() * m_params.TriangleCost( spec.numRef - i );
+			float sah = nodeSAH + leftBounds.Area() * mParams.TriangleCost( i ) + mRightBounds[i - 1].Area() * mParams.TriangleCost( spec.numRef - i );
 			float tieBreak = sqr( ( float ) i ) + sqr( ( float ) ( spec.numRef - i ) );
 			if ( sah < split.sah || ( sah == split.sah && tieBreak < bestTieBreak ) )
 			{
 				split.sah = sah;
-				split.sortDim = m_sortDim;
+				split.sortDim = mSortDim;
 				split.numLeft = i;
 				split.leftBounds = leftBounds;
-				split.rightBounds = m_rightBounds[i - 1];
+				split.rightBounds = mRightBounds[i - 1];
 				bestTieBreak = tieBreak;
 			}
 		}
@@ -248,9 +221,9 @@ SplitBVHBuilder::ObjectSplit SplitBVHBuilder::findObjectSplit( const NodeSpec& s
 
 void SplitBVHBuilder::performObjectSplit( NodeSpec& left, NodeSpec& right, const NodeSpec& spec, const ObjectSplit& split )
 {
-	m_sortDim = split.sortDim;
-	std::qsort( &m_refStack[m_refStack.size() - spec.numRef], spec.numRef, sizeof( SplitBVHBuilder::Reference ), sortCompare );
-	//sort( this, m_refStack.size() - spec.numRef, m_refStack.size(), sortCompare, sortSwap );
+	mSortDim = split.sortDim;
+	std::qsort( &mReferenceStack[mReferenceStack.size() - spec.numRef], spec.numRef, sizeof( SplitBVHBuilder::Reference ), sortCompare );
+	//sort( this, mReferenceStack.size() - spec.numRef, mReferenceStack.size(), sortCompare, sortSwap );
 
 	left.numRef = split.numLeft;
 	left.bounds = split.leftBounds;
@@ -272,7 +245,7 @@ SplitBVHBuilder::SpatialSplit SplitBVHBuilder::findSpatialSplit( const NodeSpec&
 	{
 		for ( int32 i = 0; i < NumSpatialBins; i++ )
 		{
-			SpatialBin& bin = m_bins[dim][i];
+			SpatialBin& bin = mBins[dim][i];
 			bin.bounds = AABB();
 			bin.enter = 0;
 			bin.exit = 0;
@@ -281,9 +254,9 @@ SplitBVHBuilder::SpatialSplit SplitBVHBuilder::findSpatialSplit( const NodeSpec&
 
 	// Chop references into bins.
 
-	for ( uint64 refIdx = m_refStack.size() - spec.numRef; refIdx < m_refStack.size(); refIdx++ )
+	for ( uint64 refIdx = mReferenceStack.size() - spec.numRef; refIdx < mReferenceStack.size(); refIdx++ )
 	{
-		const Reference& ref = m_refStack[refIdx];
+		const Reference& ref = mReferenceStack[refIdx];
 		int3 firstBin = clamp( int3( ( ref.bounds.Min() - origin ) * invBinSize ), 0, NumSpatialBins - 1 );
 		int3 lastBin = clamp( int3( ( ref.bounds.Max() - origin ) * invBinSize ), firstBin, NumSpatialBins - 1 );
 
@@ -294,12 +267,12 @@ SplitBVHBuilder::SpatialSplit SplitBVHBuilder::findSpatialSplit( const NodeSpec&
 			{
 				Reference leftRef, rightRef;
 				splitReference( leftRef, rightRef, currRef, dim, origin[dim] + binSize[dim] * ( float ) ( i + 1 ) );
-				m_bins[dim][i].bounds.Grow( leftRef.bounds );
+				mBins[dim][i].bounds.Grow( leftRef.bounds );
 				currRef = rightRef;
 			}
-			m_bins[dim][lastBin[dim]].bounds.Grow( currRef.bounds );
-			m_bins[dim][firstBin[dim]].enter++;
-			m_bins[dim][lastBin[dim]].exit++;
+			mBins[dim][lastBin[dim]].bounds.Grow( currRef.bounds );
+			mBins[dim][firstBin[dim]].enter++;
+			mBins[dim][lastBin[dim]].exit++;
 		}
 	}
 
@@ -313,8 +286,8 @@ SplitBVHBuilder::SpatialSplit SplitBVHBuilder::findSpatialSplit( const NodeSpec&
 		AABB rightBounds;
 		for ( int32 i = NumSpatialBins - 1; i > 0; i-- )
 		{
-			rightBounds.Grow( m_bins[dim][i].bounds );
-			m_rightBounds[i - 1] = rightBounds;
+			rightBounds.Grow( mBins[dim][i].bounds );
+			mRightBounds[i - 1] = rightBounds;
 		}
 
 		// Sweep left to right and select lowest SAH.
@@ -325,11 +298,11 @@ SplitBVHBuilder::SpatialSplit SplitBVHBuilder::findSpatialSplit( const NodeSpec&
 
 		for ( int32 i = 1; i < NumSpatialBins; i++ )
 		{
-			leftBounds.Grow( m_bins[dim][i - 1].bounds );
-			leftNum += m_bins[dim][i - 1].enter;
-			rightNum -= m_bins[dim][i - 1].exit;
+			leftBounds.Grow( mBins[dim][i - 1].bounds );
+			leftNum += mBins[dim][i - 1].enter;
+			rightNum -= mBins[dim][i - 1].exit;
 
-			float sah = nodeSAH + leftBounds.Area() * m_params.TriangleCost( leftNum ) + m_rightBounds[i - 1].Area() * m_params.TriangleCost( rightNum );
+			float sah = nodeSAH + leftBounds.Area() * mParams.TriangleCost( leftNum ) + mRightBounds[i - 1].Area() * mParams.TriangleCost( rightNum );
 			if ( sah < split.sah )
 			{
 				split.sah = sah;
@@ -351,7 +324,7 @@ void SplitBVHBuilder::performSpatialSplit( NodeSpec& left, NodeSpec& right, cons
 	// Uncategorized/split: [leftEnd, rightStart[
 	// Right-hand side:     [rightStart, refs.size()[
 
-	std::vector<Reference>& refs = m_refStack;
+	std::vector<Reference>& refs = mReferenceStack;
 	int32 leftStart = (int32)refs.size() - spec.numRef;
 	int32 leftEnd = leftStart;
 	int32 rightStart = (int32)refs.size();
@@ -396,10 +369,10 @@ void SplitBVHBuilder::performSpatialSplit( NodeSpec& left, NodeSpec& right, cons
 		ldb.Grow( lref.bounds );
 		rdb.Grow( rref.bounds );
 
-		float lac = m_params.TriangleCost( leftEnd - leftStart );
-		float rac = m_params.TriangleCost( refs.size() - rightStart );
-		float lbc = m_params.TriangleCost( leftEnd - leftStart + 1 );
-		float rbc = m_params.TriangleCost( refs.size() - rightStart + 1 );
+		float lac = mParams.TriangleCost( leftEnd - leftStart );
+		float rac = mParams.TriangleCost( (int32) refs.size() - rightStart );
+		float lbc = mParams.TriangleCost( leftEnd - leftStart + 1 );
+		float rbc = mParams.TriangleCost( (int32) refs.size() - rightStart + 1 );
 
 		float unsplitLeftSAH = lub.Area() * lbc + right.bounds.Area() * rac;
 		float unsplitRightSAH = left.bounds.Area() * lac + rub.Area() * rbc;
@@ -434,7 +407,7 @@ void SplitBVHBuilder::performSpatialSplit( NodeSpec& left, NodeSpec& right, cons
 	}
 
 	left.numRef = leftEnd - leftStart;
-	right.numRef = refs.size() - rightStart;
+	right.numRef = (int32)refs.size() - rightStart;
 }
 
 //------------------------------------------------------------------------
@@ -448,8 +421,8 @@ void SplitBVHBuilder::splitReference( Reference& left, Reference& right, const R
 
 	// Loop over vertices/edges.
 
-	const int3* tris = ( const int3* ) m_bvh.GetScene().TrianglesIndexesPtr();
-	const float3* verts = ( const float3* ) m_bvh.GetScene().VerticesPositionPtr();
+	const int3* tris = ( const int3* ) mBVH.GetScene().TrianglesIndexesPtr();
+	const float3* verts = ( const float3* ) mBVH.GetScene().VerticesPositionPtr();
 	const int3& inds = tris[ref.triIdx];
 	const float3* v1 = &verts[inds.z];
 

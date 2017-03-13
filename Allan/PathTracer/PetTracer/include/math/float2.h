@@ -3,7 +3,6 @@
 #ifndef FLOAT2_H
 #define FLOAT2_H
 
-#include <CL/cl.h>
 #include <cmath>
 
 namespace PetTracer
@@ -33,7 +32,7 @@ namespace PetTracer
 		// Mimic OpenCL cl_float2 alingment
 		union
 		{
-			T CL_ALIGNED( 8 ) s[2];
+			alignas( 8 ) T s[2];
 			struct { T x, y; };
 			struct { T s0, s1; };
 			struct { T lo, hi; };

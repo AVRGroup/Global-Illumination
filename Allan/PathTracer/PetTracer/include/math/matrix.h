@@ -3,7 +3,6 @@
 #ifndef MATRIX_H
 #define MATRIX_H
 
-#include <CL/cl.h>
 #include <cmath>
 #include <cstring>
 #include <algorithm>
@@ -53,7 +52,7 @@ namespace PetTracer
 
 		union
 		{
-			cl_float  CL_ALIGNED( 64 ) s[16];
+			alignas( 64 ) float  s[16];
 			float m[4][4];
 			struct
 			{

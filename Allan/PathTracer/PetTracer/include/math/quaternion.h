@@ -3,7 +3,6 @@
 #ifndef QUATERNION_H
 #define QUATERNION_H
 
-#include <CL/cl.h>
 #include <cmath>
 
 #include "matrix.h"

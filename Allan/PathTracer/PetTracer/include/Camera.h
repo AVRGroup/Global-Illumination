@@ -3,8 +3,6 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
-#include <CL/opencl.h>
-
 #include "math/MathUtils.h"
 
 namespace PetTracer
@@ -34,12 +32,12 @@ namespace PetTracer
 		// Set camera sensor size in meters.
 		// This distinguishes APC-S vs full-frame, etc 
 		void SetSensorSize( float2 const& size );
-		cl_float2 GetSensorSize() const;
+		float2 GetSensorSize() const;
 
 		// Set camera depth range.
 		// Does not really make sence for physical camera
 		void SetDepthRange( float2 const& range );
-		cl_float2 GetDepthRange() const;
+		float2 GetDepthRange() const;
 
 		
 		// Rotate camera around world Z axis
@@ -54,9 +52,9 @@ namespace PetTracer
 		void MoveUp( float distance );
 
 		// 
-		void ArcballRotateHorizontally( cl_float3 const& c, float angle );
+		void ArcballRotateHorizontally( float3 const& c, float angle );
 		//
-		void ArcballRotateVertically( cl_float3 const& c, float angle );
+		void ArcballRotateVertically( float3 const& c, float angle );
 
 		inline bool IsDirty() const { return mPosition.w == -1.0f; };
 		inline void Clean() { mPosition.w = 0.0f; };
