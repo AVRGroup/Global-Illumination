@@ -28,9 +28,10 @@ THE SOFTWARE.
 #include <algorithm>
 #include <cstring>
 
+#define RR_EMBED_KERNELS
 #ifdef RR_EMBED_KERNELS
 #if USE_OPENCL
-#    include <CLW/kernelcache/clwkernels_cl.h>
+#include "kernelcache/clwkernels_cl.h"
 #endif
 #endif // RR_EMBED_KERNELS
 

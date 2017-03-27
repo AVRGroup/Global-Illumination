@@ -1,6 +1,8 @@
 #ifndef CAMERA_CL
 #define CAMERA_CL
 
+#include <common.cl>
+#include <ray.cl>
 #include <path.cl>
 #include <random.cl>
 
@@ -29,16 +31,18 @@ typedef struct _camera
 
 __kernel
 void PerspectiveCamera_GeneratePaths(
-							//Future camera description
-							__global Camera const* camera,
-							// Image resolution
-							int imgWidth,
-							int imgHeight,
-							// RNG seed
-							int rngSeed,
-							// Sampler data
-							// Ouput
-							__global Ray* rays)
+	//Future camera description
+	__global Camera const* camera,
+	// Image resolution
+	int imgWidth,
+	int imgHeight,
+	// RNG seed
+	int rngSeed,
+	// Sampler data
+	// Ouput
+	__global Ray* rays,
+	__global Path* paths
+)
 {
 	int gID = get_global_id( 0 );
 	int2 globalID;
@@ -50,6 +54,7 @@ void PerspectiveCamera_GeneratePaths(
 	{
 		// get pointer to the ray
 		__global Ray* mRay = rays + ( globalID.y*imgWidth ) + globalID.x;
+		__global Path* mPath = paths + ( globalID.y*imgWidth ) + globalID.x;
 
 		// Prepare RNG
 		Rng rng;
@@ -77,6 +82,13 @@ void PerspectiveCamera_GeneratePaths(
 		mRay->o.w = camera->zcap.y - camera->zcap.x;
 		// Generate random time form [0...1]
 		mRay->d.w = sample0.x;
+		Ray_SetPixel(mRay, gID);
+
+		// Initialize path data
+		mPath->throughput = makeFloat3(1.0f, 1.0f, 1.0f);
+		mPath->volume = -1;
+		mPath->flags = 0;
+		mPath->active = 0xFF;
 	}
 }
 

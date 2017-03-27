@@ -1,4 +1,4 @@
-#include "Renderer.h"
+#include "RenderApp.h"
 #include "TracerTypes.h"
 #include "Camera.h"
 #include "Scene/Scene.h"
@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <string.h>
 
 #include <ctime>
 #include <chrono>
@@ -20,11 +21,11 @@
 
 namespace PetTracer
 {
-	class CRenderer : public Renderer
+	class PathTracer : public RenderApp
 	{
 	public:
-		CRenderer(std::string title, unsigned int width, unsigned int height)
-			: Renderer(title, width, height),
+		PathTracer(std::string title, unsigned int width, unsigned int height)
+			: RenderApp(title, width, height),
 			  mPerpectiveCamera(float3( 0.0f, 0.0f, 2.0f ), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 1.0f, 0.0f)), mScene(NULL)
 		{
 		}
@@ -39,11 +40,18 @@ namespace PetTracer
 			glFinish();
 
 			InitScene();
-
-			mRayBuffer	 = CLWBuffer<CLTypes::Ray>::Create( mOpenCLContext, CL_MEM_READ_WRITE, mScreenHeight * mScreenWidth );
-			mHitBuffer	 = CLWBuffer<CLTypes::Intersection>::Create( mOpenCLContext, CL_MEM_READ_WRITE, mScreenHeight * mScreenWidth );
-			mAccumBuffer = CLWBuffer<float3>::Create( mOpenCLContext, CL_MEM_READ_WRITE, mScreenHeight*mScreenWidth );
-			mCamera		 = CLWBuffer<Camera>::Create( mOpenCLContext, CL_MEM_READ_ONLY, 1 );
+			
+			size_t numPixels	= mScreenHeight * mScreenWidth;
+			mPP					= CLWParallelPrimitives( mOpenCLContext );
+			mRayBuffer[0]		= CLWBuffer<CLTypes::Ray>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels );
+			mRayBuffer[1]		= CLWBuffer<CLTypes::Ray>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels );
+			mPathBuffer 		= CLWBuffer<CLTypes::Path>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels );
+			mIntersections		= CLWBuffer<CLTypes::Intersection>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels );
+			mAccumBuffer		= CLWBuffer<float3>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels );
+			mCamera				= CLWBuffer<Camera>::Create( mOpenCLContext, CL_MEM_READ_ONLY, 1 );
+			mHitCount[0]		= CLWBuffer<int32>::Create( mOpenCLContext, CL_MEM_READ_WRITE, 1 );
+			mHitCount[1]		= CLWBuffer<int32>::Create( mOpenCLContext, CL_MEM_READ_WRITE, 1 );
+			mRNGState			= CLWBuffer<uint32>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels );
 			/***/
 
 			UploadCamera();
@@ -221,8 +229,8 @@ namespace PetTracer
 			// Create the kernels from the opencl programs
 			mOpenCLKernel = mOpenCLProgram.GetKernel( "render_kernel" );
 
-			mKPerspectiveCamera = mPCamera.GetKernel( "PerspectiveCamera_GeneratePaths" );
-			mKIntersectScene    = mPTracer.GetKernel( "IntersectClosest" );
+			mKPerspectiveCamera = mProgram.GetKernel( "PerspectiveCamera_GeneratePaths" );
+			mKIntersectScene    = mProgram.GetKernel( "IntersectClosest" );
 
 			// Generate the base seed for the kernels
 			std::srand( static_cast<unsigned int>( time( 0 ) ) );
@@ -233,7 +241,7 @@ namespace PetTracer
 			mOpenCLKernel.SetArg( 1,  mScreenHeight );
 			mOpenCLKernel.SetArg( 2,  mVertexBufferGL );
 			mOpenCLKernel.SetArg( 3,  seed );
-			mOpenCLKernel.SetArg( 5,  mRayBuffer );
+			mOpenCLKernel.SetArg( 5,  mRayBuffer[0] );
 			mOpenCLKernel.SetArg( 8,  mAccumBuffer );
 			mOpenCLKernel.SetArg( 9,  mScene->VerticesPositionBuffer() );
 			mOpenCLKernel.SetArg( 10, mScene->TriangleIndexBuffer() );
@@ -243,62 +251,53 @@ namespace PetTracer
 			mKPerspectiveCamera.SetArg( 1, mScreenWidth );
 			mKPerspectiveCamera.SetArg( 2, mScreenHeight );
 			mKPerspectiveCamera.SetArg( 3, seed );
-			mKPerspectiveCamera.SetArg( 4, mRayBuffer );
+			mKPerspectiveCamera.SetArg( 4, mRayBuffer[0] );
+			mKPerspectiveCamera.SetArg( 5, mPathBuffer );
 
 			mKIntersectScene.SetArg( 0, mScene->VerticesPositionBuffer() );
 			mKIntersectScene.SetArg( 1, mScene->TriangleIndexBuffer() );
 			mKIntersectScene.SetArg( 2, mScene->BVHNodeBuffer() );
-			mKIntersectScene.SetArg( 3, mRayBuffer );
-			mKIntersectScene.SetArg( 4, ( unsigned int ) mScreenWidth * mScreenHeight );
-			mKIntersectScene.SetArg( 5, mHitBuffer );
+			mKIntersectScene.SetArg( 3, mRayBuffer[0] );
+			mKIntersectScene.SetArg( 4, mScreenHeight*mScreenWidth );
+			mKIntersectScene.SetArg( 5, mIntersections );
 			mKIntersectScene.SetArg( 6, mVertexBufferGL );
 			mKIntersectScene.SetArg( 7, mScreenWidth );
 			mKIntersectScene.SetArg( 8, mScreenHeight );
+			mKIntersectScene.SetArg( 9, mHitCount[0] );
 		}
 
 		void RunKernel()
 		{
-			// FPS counter
-			static auto lastTime = std::chrono::high_resolution_clock::now();
-			static int frames = 0;
+			MeasureFps();
 
-			auto currentTime = std::chrono::high_resolution_clock::now();
-			auto dt = std::chrono::duration_cast< std::chrono::milliseconds >( currentTime - lastTime ).count();
+			int32 maxRays = mScreenWidth * mScreenHeight;
 
-			frames++;
-			if ( dt > 2000L )
-			{
-				std::string title = mTitle + " - " + std::to_string(frames / 2.0f) + " sps";
-				SDL_SetWindowTitle( mWindow, title.c_str() );
-				frames = 0;
-				lastTime = currentTime;
-			}
+			GeneratePrimaryRays();
 
-			// every pixel in the image has its own thread or "work item",
-			// so the total amount of work items equals the number of pixels
-			std::size_t global_work_size = mScreenWidth * mScreenHeight;
-			std::size_t local_work_size = 64; //mOpenCLKernel.getWorkGroupInfo<CL_KERNEL_WORK_GROUP_SIZE>( mOpenCLDevice );
+			// Copy indices
+			FillBuffer<int32>( mHitCount[0], maxRays, 1 );
 
-											 // Ensure the global work size is a multiple of local work size
-			if ( global_work_size % local_work_size != 0 )
-				global_work_size = ( ( global_work_size ) / local_work_size + 1 ) * local_work_size;
 
-			mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, mKPerspectiveCamera );
-
+			///REMOVE THIS
 			//Make sure OpenGL is done using the VBOs
 			glFinish();
-
 			//this passes in the vector of VBO buffer objects 
 			mOpenCLContext.AcquireGLObjects( 0, mVBOs );
 
-			local_work_size = 64;
-			if ( global_work_size % local_work_size != 0 )
-				global_work_size = ( ( global_work_size ) / local_work_size + 1 ) * local_work_size;
-			
+			for ( int32 pass = 0; pass < 5; pass++)
+			{
+				// Clear the ray hits - SEE THIS LATER
+				//FillBuffer( mHits, 0, maxRays );
 
-			// launch the kernel
-			/*for ( int32 i = 0; i < 5; i++) */mOpenCLContext.Launch1D( 0, global_work_size, 64, mKIntersectScene ); // local_work_size
-			mOpenCLContext.Launch1D( 0, global_work_size, 64, mOpenCLKernel );
+				TraceRays( pass );
+
+				FillBuffer<int32>( mHitCount[(pass+1) & 0x1], 0, 1 );
+
+				ShadeSurface( pass );
+
+
+			}
+			//mOpenCLContext.Launch1D( 0, global_work_size, 64, mOpenCLKernel );
 			//mQueue.enqueueNDRangeKernel( mOpenCLKernel, NULL, global_work_size, local_work_size ); // local_work_size
 
 																								   //Release the VBOs so OpenGL can play with them
@@ -310,8 +309,8 @@ namespace PetTracer
 		{
 			bool err = true;
 			err = CreateProgram( "../../../src/kernels/CL/opencl_kernel.cl", mOpenCLProgram ) && err;
-			err = CreateProgram( "../../../src/kernels/CL/camera.cl", mPCamera ) && err;
-			err = CreateProgram( "../../../src/kernels/CL/tracer.cl", mPTracer ) && err;
+			//err = CreateProgram( "../../../src/kernels/CL/camera.cl", mPCamera ) && err;
+			err = CreateProgram( "../../../src/kernels/CL/tracer.cl", mProgram ) && err;
 
 			return err;
 		}
@@ -341,22 +340,6 @@ namespace PetTracer
 				BuildParams params;
 				params.MaxLeafSize = 1;
 				mScene->BuildBVH( params );
-				
-				/*mScene->LoadBVHFromFile( "../../../data/bvhoutput.bvh" );
-				mScene->UploadScene( true );*/
-
-				/*std::cout << std::endl << "Constructing BVH" << std::endl;
-				timer.Start();
-				BuildParams params;
-				params.MaxLeafSize = 1;
-				BVH sceneBVH( mScene, params );
-				std::cout << "BVH constructed: " << timer.ElapsedTime() << "ms elapsed." << std::endl;
-
-				std::cout << std::endl << "Translating BVH" << std::endl;
-				timer.Start();
-				mScene->UpdateBVH( sceneBVH );
-				mScene->UploadScene( true );
-				std::cout << "BVH Translated: " << timer.ElapsedTime() << "ms elapsed." << std::endl;*/
 			}
 		}
 
@@ -392,22 +375,120 @@ namespace PetTracer
 		}
 
 	private:
+		void GeneratePrimaryRays()
+		{
+			size_t local_work_size = 64;
+			size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
+
+			mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, mKPerspectiveCamera );
+		}
+
+		void TraceRays(int pass)
+		{
+			size_t local_work_size = 64;
+			size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
+
+			mKIntersectScene.SetArg(3, mRayBuffer[pass & 0x1]);
+
+			// launch the kernel
+			mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, mKIntersectScene ); // local_work_size
+		}
+
+		void ShadeSurface( int pass )
+		{
+			size_t local_work_size = 64;
+			size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
+
+			CLWKernel kernel = mProgram.GetKernel( "ShadeSurface" );
+			int32 arg = 0;
+			kernel.SetArg( arg++, mRayBuffer[pass & 0x1] );
+			kernel.SetArg( arg++, mRayBuffer[( pass + 1 ) & 0x1] );
+			kernel.SetArg( arg++, mIntersections );
+			kernel.SetArg( arg++, mHitCount[pass & 0x1] );
+			kernel.SetArg( arg++, mHitCount[( pass + 1 ) & 0x1] );
+			kernel.SetArg( arg++, mScene->VerticesPositionBuffer() );
+			kernel.SetArg( arg++, mScene->VerticesNormalBuffer() );
+			kernel.SetArg( arg++, mScene->VerticesTexCoordBufer() );
+			kernel.SetArg( arg++, mScene->TriangleIndexBuffer() );
+			kernel.SetArg( arg++, rand() );
+			kernel.SetArg( arg++, mRNGState );
+			kernel.SetArg( arg++, pass );
+			kernel.SetArg( arg++, mPathBuffer );
+			kernel.SetArg( arg++, mAccumBuffer );
+
+			// launch the kernel
+			mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, kernel );
+		}
+
+		template<class T>
+		void FillBuffer(CLWBuffer<T>& buffer, T pattern, size_t elements)
+		{
+			T* mappedPtr;
+			mOpenCLContext.MapBuffer<T>( 0, buffer, CL_MAP_WRITE, &mappedPtr ).Wait();
+			/*for ( size_t i = 0; i < elements; i++ )
+			{
+				mappedPtr[i] = pattern;
+			}*/
+			memset( mappedPtr, pattern, sizeof( T )*elements );
+			mOpenCLContext.UnmapBuffer( 0, buffer, mappedPtr ).Wait();
+		}
+
+		template<int32>
+		void FillBuffer( CLWBuffer<int32>& buffer, int32 pattern, size_t elements )
+		{
+			int32* mappedPtr;
+			mOpenCLContext.MapBuffer<T>( 0, buffer, CL_MAP_WRITE, &mappedPtr ).Wait();
+			for ( size_t i = 0; i < elements; i++ )
+			{
+				mappedPtr[i] = pattern;
+			}
+			mOpenCLContext.UnmapBuffer( 0, buffer, mappedPtr ).Wait();
+		}
+
+
+		void MeasureFps()
+		{
+			// FPS counter
+			static auto lastTime = std::chrono::high_resolution_clock::now();
+			static int frames = 0;
+
+			auto currentTime = std::chrono::high_resolution_clock::now();
+			auto dt = std::chrono::duration_cast< std::chrono::milliseconds >( currentTime - lastTime ).count();
+
+			frames++;
+			if ( dt > 2000L )
+			{
+				std::string title = mTitle + " - " + std::to_string( frames / 2.0f ) + " sps";
+				SDL_SetWindowTitle( mWindow, title.c_str() );
+				frames = 0;
+				lastTime = currentTime;
+			}
+		}
+
+
+	private:
 		CLWProgram		mOpenCLProgram;
 
 		// OpenCL programs
-		CLWProgram		mPCamera;
-		CLWProgram		mPTracer;
+		//CLWProgram		mPCamera;
+		CLWProgram		mProgram;
 
 		// OpenCL kernels
 		CLWKernel		mKPerspectiveCamera;
 		CLWKernel		mKIntersectScene;
 
+		CLWParallelPrimitives				mPP;
+
 
 		CLWKernel							mOpenCLKernel;
-		CLWBuffer<CLTypes::Ray>				mRayBuffer;
-		CLWBuffer<CLTypes::Intersection>	mHitBuffer;
+		CLWBuffer<CLTypes::Ray>				mRayBuffer[2];
+		CLWBuffer<CLTypes::Intersection>	mIntersections;
 		CLWBuffer<Camera>					mCamera;
 		CLWBuffer<float3>					mAccumBuffer;
+		
+		CLWBuffer<CLTypes::Path>			mPathBuffer;
+		CLWBuffer<int>						mHitCount[2];
+		CLWBuffer<uint32>					mRNGState;
 
 		CLWBuffer<float4>					mVertexBufferGL;
 		//cl::BufferGL	mVertexBufferGL;
@@ -429,7 +510,7 @@ namespace PetTracer
 
 int main( int argc, char* argv[] )
 {
-	PetTracer::CRenderer renderer("OpenCL Path Tracer", 800, 600);
+	PetTracer::PathTracer renderer("OpenCL Path Tracer", 800, 600);
 	renderer.Start();
 	return 0;
 }

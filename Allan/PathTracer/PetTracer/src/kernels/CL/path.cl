@@ -1,79 +1,87 @@
-
-
-
 #ifndef PATH_CL
 #define PATH_CL
 
-#define PI 3.14159265358979323846f
-#define EPSILON 0.00003f
-//#define INFINITY 1e20f
-
-typedef struct _ray
+typedef struct _path
 {
-	// xyz - origin, w - max range
-	float4 o;
-	// xyz - direction, w - time
-	float4 d;
+	float3 throughput;
+	int volume;
+	int flags;
+	int active;
+	int extra1;
+} Path;
 
-	int2 extra;
-	float2 padding;
-} Ray;
-
-typedef struct _bbox
+typedef enum _pathFlags
 {
-	float4 pmin;
-	float4 pmax;
-} BBox;
+	kNone           = 0x0,
+	kKilled         = 0x1,
+	kScattered      = 0x2,
+	kSpecularBounce = 0x4
+} PathFlags;
 
-typedef struct _intersection
+bool Path_IsScattered(__global Path const* path)
 {
-	// ID of a shape
-	int shapeID;
-	// Primitive index
-	int primID;
-	// Padding elements
-	int padding0;
-	int padding1;
-
-	// uv - hit baricentrics, w - ray distance
-	float4 uvwt;
-} Intersection;
-
-typedef struct _differentialGeometry
-{
-	// World space position
-	float3 p;
-	// Shading normal
-	float3 n;
-	// Geo normal
-	float3 ng;
-	// UVs
-	float2 uv;
-	// Derivatives
-	float3 dpdu;
-	float3 dpdv;
-	float area;
-	// Maybe material later
-
-} DifferentialGeometry;
-
-float4 makeFloat4(float x, float y, float z, float w)
-{
-	float4 res;
-	res.x = x;
-	res.y = y;
-	res.z = z;
-	res.w = w;
-	return res;
+	return (path->flags & kScattered);
 }
 
-float3 makeFloat3( float x, float y, float z )
+bool Path_IsSpecular(__global Path const* path)
 {
-	float3 res;
-	res.x = x;
-	res.y = y;
-	res.z = z;
-	return res;
+	return (path->flags & kSpecularBounce);
+}
+
+bool Path_IsAlive(__global Path const* path)
+{
+	return ((path->flags & kKilled) == 0);
+}
+
+void Path_ClearScatterFlag(__global Path* path)
+{
+	path->flags &= ~kScattered;
+}
+
+void Path_SetScatterFlag(__global Path* path)
+{
+	path->flags |= kScattered;
+}
+
+void Path_ClearSpecularFlag(__global Path* path)
+{
+	path->flags &= ~kSpecularBounce;
+}
+
+void Path_SetSpecularFlag(__global Path* path)
+{
+	path->flags |= kSpecularBounce;
+}
+
+void Path_Restart(__global Path* path)
+{
+	path->flags = 0;
+}
+
+int Path_GetVolumeIndex(__global Path const* path)
+{
+	return path->volume;
+}
+
+float3 Path_GetThroughput(__global Path const* path)
+{
+	float3 t = path->throughput;
+	return t;
+}
+
+void Path_MulThroughput(__global Path* path, float3 mul)
+{
+	path->throughput *= mul;
+}
+
+void Path_Kill(__global Path* path)
+{
+	path->flags |= kKilled;
+}
+
+void Path_AddContribution(__global Path* path, __global float3* output, int index, float3 val)
+{
+	output[index] += Path_GetThroughput(path) * val;
 }
 
 #endif

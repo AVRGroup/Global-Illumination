@@ -17,6 +17,15 @@ namespace PetTracer
 			cl_float2 padding;
 		} Ray;
 
+		typedef struct _path
+		{
+			cl_float3 throughput;
+			cl_int volume;
+			cl_int flags;
+			cl_int active;
+			cl_int extra1;
+		} Path;
+
 		struct BBox
 		{
 			cl_float4 pmin;

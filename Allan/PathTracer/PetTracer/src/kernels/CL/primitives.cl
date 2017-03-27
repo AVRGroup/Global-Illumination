@@ -2,6 +2,8 @@
 #ifndef PRIMITIVES_CL
 #define PRIMITIVES_CL
 
+#include <common.cl>
+#include <ray.cl>
 #include <path.cl>
 
 typedef struct Sphere

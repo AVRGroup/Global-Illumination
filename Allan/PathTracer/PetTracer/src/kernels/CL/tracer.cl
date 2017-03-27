@@ -1,7 +1,11 @@
+#include <common.cl>
+#include <ray.cl>
 #include <path.cl>
 #include <primitives.cl>
 #include <random.cl>
 #include <bvh.cl>
+#include <camera.cl>
+#include <scene.cl>
 
 void IntersectScene( SceneData const* scenedata, Ray* r, Intersection* isect )
 {
@@ -10,27 +14,7 @@ void IntersectScene( SceneData const* scenedata, Ray* r, Intersection* isect )
 	isect->uvwt = (float4)( 0.0f, 0.0f, 0.0f, 1e20f );
 	r->o.w = 1e20f;
 
-	/*for ( int i = 0; i < sphereCount; i++ )
-	{
-		float hitDistance = IntersectSphere( &scene[i], r );
-
-		if ( hitDistance != 0.0f && hitDistance < isect->uvwt.w )
-		{
-			isect->shapeID = i;
-			isect->uvwt.w = hitDistance;
-		}
-	}*/
-
 	IntersectSceneClosest( scenedata, r, isect );
-
-	/*BBox meshBB;
-	meshBB.pmin = ( float4 )( -0.10f, -0.10f, -0.10f, 0.0f );
-	meshBB.pmax = ( float4 )( 0.10f, 0.10f, 0.10f, 0.0f );
-	const float3 invDir = makeFloat3( 1.0f, 1.0f, 1.0f ) / ( r->d.xyz );
-	if ( IntersectBox( r, invDir, meshBB, 1e20f ) )
-	{
-		isect->uvwt.x = 1.0f;
-	}*/
 }
 
 float3 getHeatMapColor( float value )
@@ -59,18 +43,18 @@ float3 getHeatMapColor( float value )
 __attribute__( ( reqd_work_group_size( 64, 1, 1 ) ) )
 __kernel void IntersectClosest(
 				// Scene description
-				__global float4* vertices,		//0
+				__global float3* vertices,		//0
 				__global int4*	 faces,			//1
 				__global BBox*	 nodes,			//2
 				// Rays input
 				__global Ray* rays,				//3
-				unsigned int numRays,			//4
+				int numRays,					//4
 				// Ray hit output
 				__global Intersection* hits,	//5
 				// Debug output
 				__global float3* output,		//6
 				unsigned int width,				//7
-				unsigned int height				//8
+				unsigned int height			    //8
 				)
 {
 	int globalID = get_global_id( 0 );
@@ -117,4 +101,112 @@ __kernel void IntersectClosest(
 		output[globalID] = ( float3 )( fx, fy, fcolour.c );
 
 	}
+}
+
+__kernel void ShadeSurface(
+	// Rays
+	__global Ray          const*    rays,
+	// Output Rays
+	__global Ray   		  	   *	outRays,
+	// Intersections
+	__global Intersection const*    isects,
+	// Number of rays
+	__global int          const*    numRays,
+	// Number of output rays
+	__global int 		       *    nOutRays,
+	// Geometry vertices
+	__global float3       const*    vertices,
+	// Geometry normals
+	__global float3       const*    normals,
+	// Geometry UVs
+	__global float4       const*    uvs,
+	// Indices
+	__global int4         const*    indices,
+	// Surfaces
+	// TODO
+	// Material IDs
+	// TODO
+	// Materials
+	// TODO
+	// RNG seed
+	uint rngSeed,
+	// Sampler states
+	__global uint 			   * 	random,
+	// Current Bounce
+	         int 					bounce,
+	// Current frame
+	//		 int 					frame,
+	// Path data
+	__global Path 			   * 	paths,
+	// Radiance accum buffer
+	__global float3 		   * 	output
+
+)
+{
+	int globalID = get_global_id(0);
+
+	Scene scene = {
+		vertices,
+		normals,
+		uvs,
+		indices
+	};
+
+	if(globalID < *numRays)
+	{
+		__global Ray  		  const* r     = rays + globalID;
+		__global Intersection const* isect = isects + globalID;
+				 int         		 idx   = Ray_GetPixel(r);
+		__global Path 		  const* path  = path + idx;
+
+		if(isect->shapeID != -1)
+		{
+			int idx = atomic_inc(nOutRays);
+			outRays[idx] = *r;
+		}
+		/*const int flt = 0;
+		const float3 color   = ((hitSphereID % 2) == 0)  ? makeFloat3(0.75f, 0.75f, 0.75f) : makeFloat3(0.0f, 0.0f, 0.0f);
+		const float3 emissive = ((hitSphereID % 2) == 0) ? makeFloat3(0.0f, 0.0f, 0.0f) : makeFloat3(32.0f, 32.0f, 32.0f);
+
+		float3 hitPoint = difGeo.p;
+
+		float3 normal = difGeo.n;
+		float3 normalFacing = dot(normal, ray.d.xyz) < 0.0f ? normal : normal * ( -1.0f );
+
+		float3 newDir;
+
+		if ( flt == 0 )
+		{
+			float rand1 = 2.0f * PI * getRandom( seed0, seed1 );
+			float rand2 = getRandom( seed0, seed1 );
+			float rand2s = sqrt( rand2 );
+
+			float3 w = normalFacing;
+			float3 axis = fabs( w.x ) > 0.1f ? ( float3 )( 0.0f, 1.0f, 0.0f ) : ( float3 )( 1.0f, 0.0f, 0.0f );
+			float3 u = normalize( cross( axis, w ) );
+			float3 v = cross( w, u );
+
+			newDir = normalize( u * cos( rand1 )*rand2s + v*sin( rand1 )*rand2s + w*sqrt( 1.0f - rand2 ) );
+		} else
+		{
+			newDir = normalize( ray.d.xyz - normalFacing * 2.0f * dot( normalFacing, ray.d.xyz ));
+		}
+
+
+		ray.o = (float4)(hitPoint + normalFacing * EPSILON, 0.0f);
+		ray.d = (float4)(newDir, ray.d.w);
+
+
+		if ( mask.x <= 0.001f ) mask.x = 0.0f;
+		if ( mask.y <= 0.001f ) mask.y = 0.0f;
+		if ( mask.z <= 0.001f ) mask.z = 0.0f;
+
+		accumDist += t;*/
+		//accumColor += mask * (emissive/* / accumDist*accumDist */);
+		//mask *= color;
+
+		//mask *= dot( newDir, normalFacing );
+
+	}
+
 }
