@@ -73,9 +73,8 @@ namespace PetTracer
 		}
 
 		void Draw() override
-		{			
-			static int iteration = 1;
-			if ( mResetRender ) { iteration = 1; mResetRender = false; }
+		{
+			if ( mResetRender ) { mIteration = 1; mResetRender = false; }
 
 			// If the camera has been changed
 			if ( mPerpectiveCamera.IsDirty() )
@@ -85,19 +84,19 @@ namespace PetTracer
 				ClearAccumBuffer();
 			}
 
-			if ( mResetRender ) { iteration = 1; mResetRender = false; }
+			if ( mResetRender ) { mIteration = 1; mResetRender = false; }
 			int ran = rand();
 
-			mOpenCLKernel.SetArg( 3, (unsigned int) ran );
-			mOpenCLKernel.SetArg( 4,  iteration );
+			/*mOpenCLKernel.SetArg( 3, (unsigned int) ran );
+			mOpenCLKernel.SetArg( 4,  mIteration );
 			mOpenCLKernel.SetArg( 6, rand() / RAND_MAX );
-			mOpenCLKernel.SetArg( 7, rand() / RAND_MAX );
+			mOpenCLKernel.SetArg( 7, rand() / RAND_MAX );*/
 
 			mKPerspectiveCamera.SetArg( 3, rand() );
 			
 			if(mTrace)RunKernel();
 			
-			iteration++;
+			mIteration++;
 
 			glClear( GL_COLOR_BUFFER_BIT );
 			glBindBuffer( GL_ARRAY_BUFFER, mVertexBufferObject );
@@ -207,6 +206,7 @@ namespace PetTracer
 		{
 			// Fill accumulation buffer with zeros
 			float3* mappedAccumBuffer = nullptr;
+			mOpenCLContext.Flush( 0 );
 			mOpenCLContext.MapBuffer( 0, mAccumBuffer, CL_MAP_WRITE, &mappedAccumBuffer ).Wait();
 			memset( mappedAccumBuffer, 0, mScreenHeight * mScreenWidth * sizeof( float3 ) );
 			mOpenCLContext.UnmapBuffer( 0, mAccumBuffer, mappedAccumBuffer ).Wait();
@@ -227,7 +227,7 @@ namespace PetTracer
 		void InitializeKernel()
 		{
 			// Create the kernels from the opencl programs
-			mOpenCLKernel = mOpenCLProgram.GetKernel( "render_kernel" );
+			//mOpenCLKernel = mOpenCLProgram.GetKernel( "render_kernel" );
 
 			mKPerspectiveCamera = mProgram.GetKernel( "PerspectiveCamera_GeneratePaths" );
 			mKIntersectScene    = mProgram.GetKernel( "IntersectClosest" );
@@ -237,7 +237,7 @@ namespace PetTracer
 			unsigned int seed = ( unsigned ) std::rand();
 
 			// Setup each kernel with its data
-			mOpenCLKernel.SetArg( 0,  mScreenWidth );
+			/*mOpenCLKernel.SetArg( 0,  mScreenWidth );
 			mOpenCLKernel.SetArg( 1,  mScreenHeight );
 			mOpenCLKernel.SetArg( 2,  mVertexBufferGL );
 			mOpenCLKernel.SetArg( 3,  seed );
@@ -245,14 +245,15 @@ namespace PetTracer
 			mOpenCLKernel.SetArg( 8,  mAccumBuffer );
 			mOpenCLKernel.SetArg( 9,  mScene->VerticesPositionBuffer() );
 			mOpenCLKernel.SetArg( 10, mScene->TriangleIndexBuffer() );
-			mOpenCLKernel.SetArg( 11, mScene->BVHNodeBuffer() );
+			mOpenCLKernel.SetArg( 11, mScene->BVHNodeBuffer() );*/
 
 			mKPerspectiveCamera.SetArg( 0, mCamera );
 			mKPerspectiveCamera.SetArg( 1, mScreenWidth );
 			mKPerspectiveCamera.SetArg( 2, mScreenHeight );
 			mKPerspectiveCamera.SetArg( 3, seed );
-			mKPerspectiveCamera.SetArg( 4, mRayBuffer[0] );
-			mKPerspectiveCamera.SetArg( 5, mPathBuffer );
+			mKPerspectiveCamera.SetArg( 4, mRNGState );
+			mKPerspectiveCamera.SetArg( 5, mRayBuffer[0] );
+			mKPerspectiveCamera.SetArg( 6, mPathBuffer );
 
 			mKIntersectScene.SetArg( 0, mScene->VerticesPositionBuffer() );
 			mKIntersectScene.SetArg( 1, mScene->TriangleIndexBuffer() );
@@ -275,31 +276,32 @@ namespace PetTracer
 			GeneratePrimaryRays();
 
 			// Copy indices
-			FillBuffer<int32>( mHitCount[0], maxRays, 1 );
+			FillBuffer( mHitCount[0], maxRays, 1 );
 
-
-			///REMOVE THIS
-			//Make sure OpenGL is done using the VBOs
-			glFinish();
-			//this passes in the vector of VBO buffer objects 
-			mOpenCLContext.AcquireGLObjects( 0, mVBOs );
 
 			for ( int32 pass = 0; pass < 5; pass++)
 			{
-				// Clear the ray hits - SEE THIS LATER
-				//FillBuffer( mHits, 0, maxRays );
 
 				TraceRays( pass );
 
-				FillBuffer<int32>( mHitCount[(pass+1) & 0x1], 0, 1 );
+				FillBuffer( mHitCount[(pass+1) & 0x1], 0, 1 );
 
 				ShadeSurface( pass );
 
 
 			}
-			//mOpenCLContext.Launch1D( 0, global_work_size, 64, mOpenCLKernel );
+			/*size_t local_work_size = 64;
+			size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
+			mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, mOpenCLKernel );*/
 			//mQueue.enqueueNDRangeKernel( mOpenCLKernel, NULL, global_work_size, local_work_size ); // local_work_size
 
+
+			//Make sure OpenGL is done using the VBOs
+			glFinish();
+			//this passes in the vector of VBO buffer objects 
+			mOpenCLContext.AcquireGLObjects( 0, mVBOs );
+
+			Accumulate();
 																								   //Release the VBOs so OpenGL can play with them
 			mOpenCLContext.ReleaseGLObjects( 0, mVBOs );
 			mOpenCLContext.Finish( 0 );
@@ -308,7 +310,7 @@ namespace PetTracer
 		bool CreateProgram()
 		{
 			bool err = true;
-			err = CreateProgram( "../../../src/kernels/CL/opencl_kernel.cl", mOpenCLProgram ) && err;
+			//err = CreateProgram( "../../../src/kernels/CL/opencl_kernel.cl", mOpenCLProgram ) && err;
 			//err = CreateProgram( "../../../src/kernels/CL/camera.cl", mPCamera ) && err;
 			err = CreateProgram( "../../../src/kernels/CL/tracer.cl", mProgram ) && err;
 
@@ -335,7 +337,7 @@ namespace PetTracer
 			{
 				std::cout << std::endl << "Opening Scene" << std::endl;
 				Timer<milliseconds> timer;
-				mScene = new Scene ( mOpenCLContext, "../../../data/orig.obj" );
+				mScene = new Scene ( mOpenCLContext, "../../../data/orig2.obj" );
 				std::cout << "Scene opened: " << timer.ElapsedTime() << "ms elapsed." << std::endl;
 				BuildParams params;
 				params.MaxLeafSize = 1;
@@ -388,7 +390,8 @@ namespace PetTracer
 			size_t local_work_size = 64;
 			size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
 
-			mKIntersectScene.SetArg(3, mRayBuffer[pass & 0x1]);
+			mKIntersectScene.SetArg( 3, mRayBuffer[pass & 0x1]);
+			mKIntersectScene.SetArg( 4, mHitCount[pass & 0x1] );
 
 			// launch the kernel
 			mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, mKIntersectScene ); // local_work_size
@@ -408,8 +411,9 @@ namespace PetTracer
 			kernel.SetArg( arg++, mHitCount[( pass + 1 ) & 0x1] );
 			kernel.SetArg( arg++, mScene->VerticesPositionBuffer() );
 			kernel.SetArg( arg++, mScene->VerticesNormalBuffer() );
-			kernel.SetArg( arg++, mScene->VerticesTexCoordBufer() );
+			kernel.SetArg( arg++, mScene->VerticesTexCoordBuffer() );
 			kernel.SetArg( arg++, mScene->TriangleIndexBuffer() );
+			kernel.SetArg( arg++, mScene->MaterialListBuffer() );
 			kernel.SetArg( arg++, rand() );
 			kernel.SetArg( arg++, mRNGState );
 			kernel.SetArg( arg++, pass );
@@ -420,24 +424,28 @@ namespace PetTracer
 			mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, kernel );
 		}
 
-		template<class T>
-		void FillBuffer(CLWBuffer<T>& buffer, T pattern, size_t elements)
+		void Accumulate(  )
 		{
-			T* mappedPtr;
-			mOpenCLContext.MapBuffer<T>( 0, buffer, CL_MAP_WRITE, &mappedPtr ).Wait();
-			/*for ( size_t i = 0; i < elements; i++ )
-			{
-				mappedPtr[i] = pattern;
-			}*/
-			memset( mappedPtr, pattern, sizeof( T )*elements );
-			mOpenCLContext.UnmapBuffer( 0, buffer, mappedPtr ).Wait();
+			size_t local_work_size = 64;
+			size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
+
+			CLWKernel kernel = mProgram.GetKernel( "Accumulate" );
+			int32 arg = 0;
+			kernel.SetArg( arg++, mScreenHeight*mScreenWidth );
+			kernel.SetArg( arg++, mAccumBuffer );
+			kernel.SetArg( arg++, mVertexBufferGL );
+			kernel.SetArg( arg++, mScreenWidth );
+			kernel.SetArg( arg++, mScreenHeight );
+			kernel.SetArg( arg++, mIteration );
+
+			// launch the kernel
+			mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, kernel );
 		}
 
-		template<int32>
 		void FillBuffer( CLWBuffer<int32>& buffer, int32 pattern, size_t elements )
 		{
 			int32* mappedPtr;
-			mOpenCLContext.MapBuffer<T>( 0, buffer, CL_MAP_WRITE, &mappedPtr ).Wait();
+			mOpenCLContext.MapBuffer<int32>( 0, buffer, CL_MAP_WRITE, &mappedPtr ).Wait();
 			for ( size_t i = 0; i < elements; i++ )
 			{
 				mappedPtr[i] = pattern;
@@ -467,7 +475,7 @@ namespace PetTracer
 
 
 	private:
-		CLWProgram		mOpenCLProgram;
+		//CLWProgram		mOpenCLProgram;
 
 		// OpenCL programs
 		//CLWProgram		mPCamera;
@@ -495,6 +503,8 @@ namespace PetTracer
 		std::vector<cl_mem>					mVBOs;
 		GLuint								mVertexBufferObject;
 
+		int32								mIteration;
+
 		Camera mPerpectiveCamera;
 
 		Scene* mScene;
@@ -510,7 +520,7 @@ namespace PetTracer
 
 int main( int argc, char* argv[] )
 {
-	PetTracer::PathTracer renderer("OpenCL Path Tracer", 800, 600);
+	PetTracer::PathTracer renderer("OpenCL Path Tracer", 500, 500);
 	renderer.Start();
 	return 0;
 }

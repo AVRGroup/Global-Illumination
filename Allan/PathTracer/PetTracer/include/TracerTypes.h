@@ -19,11 +19,11 @@ namespace PetTracer
 
 		typedef struct _path
 		{
-			cl_float3 throughput;
-			cl_int volume;
-			cl_int flags;
-			cl_int active;
-			cl_int extra1;
+			int throughput[4];
+			int volume;
+			int flags;
+			int active;
+			int extra1;
 		} Path;
 
 		struct BBox
@@ -41,5 +41,41 @@ namespace PetTracer
 
 			cl_float4 uvwt;
 		} Intersection;
+
+		typedef struct _material
+		{
+			/*struct _material( cl_float4 spe_alb, cl_float4 _emissive, float _roughness, float _metallic )
+			{
+				albedo = spe_alb;
+				emissive = _emissive;
+				roughness = _roughness;
+				metallic = _metallic;
+			}*/
+
+			union
+			{
+				cl_float4 albedo;
+				cl_float4 specular;
+			};
+
+			cl_float4 emissive;
+
+			union
+			{
+				int albedoTexID;
+				int specularTexID;
+			};
+
+			int normalTexID;
+
+			union
+			{
+				float ior;
+				float roughness;
+			};
+
+			float metallic;
+
+		} Material;
 	}
 }

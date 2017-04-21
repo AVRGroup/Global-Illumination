@@ -51,7 +51,7 @@ void InitRng( uint seed, Rng* rng )
 {
 	rng->val = WangHash( seed );
 	for ( int i=0; i< 100; ++i )
-		RandFloat( rng );
+		RandUint( rng );
 }
 
 #endif

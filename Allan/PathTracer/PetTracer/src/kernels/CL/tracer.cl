@@ -6,6 +6,7 @@
 #include <bvh.cl>
 #include <camera.cl>
 #include <scene.cl>
+#include <material.cl>
 
 void IntersectScene( SceneData const* scenedata, Ray* r, Intersection* isect )
 {
@@ -47,8 +48,8 @@ __kernel void IntersectClosest(
 				__global int4*	 faces,			//1
 				__global BBox*	 nodes,			//2
 				// Rays input
-				__global Ray* rays,				//3
-				int numRays,					//4
+				__global Ray*	 rays,			//3
+				__global int*	 numRays,		//4
 				// Ray hit output
 				__global Intersection* hits,	//5
 				// Debug output
@@ -63,7 +64,7 @@ __kernel void IntersectClosest(
 	SceneData scenedata = { nodes, vertices, faces };
 
 	// check for work
-	if ( globalID < numRays )
+	if ( globalID < *numRays )
 	{
 		Ray r = rays[globalID];
 
@@ -73,32 +74,6 @@ __kernel void IntersectClosest(
 		IntersectScene( &scenedata, &r, &isect );
 
 		hits[globalID] = isect;
-
-		// Debug
-		int x_coord = globalID % width;
-		int y_coord = globalID / width;
-
-		float fx = ( ( float ) (x_coord + 0.0001f) / ( float ) width ) * 2.0f - 1.0f;
-		float fy = ( ( float ) (y_coord + 0.0001f) / ( float ) height ) * 2.0f - 1.0f;
-
-		union Colour { float c; uchar4 components; } fcolour;
-
-		float3 heatColor = isect.uvwt.w / ( isect.uvwt.w + 1.0f );
-		heatColor.z = 0.125f;
-
-		fcolour.components = ( uchar4 )
-				( ( unsigned char )( ( heatColor.x ) * 255 ),
-				( unsigned char )( ( heatColor.y ) * 255 ),
-				( unsigned char )( ( heatColor.z ) * 255 ),
-				1 );
-
-		/*fcolour.components = ( uchar4 )
-			( ( unsigned char )( ( fx / ( fx + 1 ) ) * 255 ),
-			( unsigned char )( ( fy / ( fy + 1 ) ) * 255 ),
-				( unsigned char )( ( isect.uvwt.w / ( isect.uvwt.w + 1 ) ) * 255 ),
-				1 );*/
-
-		output[globalID] = ( float3 )( fx, fy, fcolour.c );
 
 	}
 }
@@ -124,14 +99,12 @@ __kernel void ShadeSurface(
 	__global int4         const*    indices,
 	// Surfaces
 	// TODO
-	// Material IDs
-	// TODO
 	// Materials
-	// TODO
+	__global Material	  const*    materials,
 	// RNG seed
-	uint rngSeed,
+	         uint					rngSeed,
 	// Sampler states
-	__global uint 			   * 	random,
+	__global Rng 			   * 	random,
 	// Current Bounce
 	         int 					bounce,
 	// Current frame
@@ -154,59 +127,112 @@ __kernel void ShadeSurface(
 
 	if(globalID < *numRays)
 	{
-		__global Ray  		  const* r     = rays + globalID;
+		__global Ray  		  const* r     = rays   + globalID;
 		__global Intersection const* isect = isects + globalID;
 				 int         		 idx   = Ray_GetPixel(r);
-		__global Path 		  const* path  = path + idx;
+		__global Path 		  const* path  = paths  + idx;
+		//__global float3			   * accum = output + idx;
 
-		if(isect->shapeID != -1)
+
+
+		float3 contrib;
+		if ( isect->shapeID != -1 && length(Path_GetThroughput(path)) > EPSILON )
 		{
-			int idx = atomic_inc(nOutRays);
-			outRays[idx] = *r;
+
+			const int flt = 0;
+			__global Material *mat = materials + isect->shapeID;
+			const float3 color    = mat->albedo.xyz;
+			const float3 emissive = mat->emissive.xyz;
+			/*const float3 color    = ( ( isect->shapeID % 2 ) == 0 ) ? makeFloat3( 0.75f, 0.75f, 0.75f ) : makeFloat3( 00.0f, 00.0f, 00.0f );
+			const float3 emissive = ( ( isect->shapeID % 2 ) == 0 ) ? makeFloat3( 0.00f, 0.00f, 0.00f ) : makeFloat3( 2.0f, 2.0f, 2.0f );*/
+
+			float3 hitPoint = r->o.xyz + isect->uvwt.w * r->d.xyz;
+
+			float3 normal = isect->uvwt.xyz;
+			float3 normalFacing = dot( normal, r->d.xyz ) < 0.0f ? normal : normal * ( -1.0f );
+
+			float3 newDir;
+
+			if ( flt == 0 )
+			{
+				Rng seed0 = random[idx];
+				seed0.val += rngSeed + ( globalID << 2 ) * 157 + 13;
+
+				float rand1 = 2.0f * PI *  RandFloat( &seed0 );
+				float rand2 = RandFloat( &seed0 );
+				float rand2s = sqrt( rand2 );
+
+				float3 w = normalFacing;
+				float3 axis = fabs( w.x ) > 0.1f ? ( float3 )( 0.0f, 1.0f, 0.0f ) : ( float3 )( 1.0f, 0.0f, 0.0f );
+				float3 u = normalize( cross( axis, w ) );
+				float3 v = cross( w, u );
+
+				newDir = normalize( u * cos( rand1 )*rand2s + v*sin( rand1 )*rand2s + w*sqrt( 1.0f - rand2 ) );
+				
+				random[idx] = seed0;
+			}
+			else
+			{
+				newDir = normalize( r->d.xyz - normalFacing * 2.0f * dot( normalFacing, r->d.xyz ) );
+			}
+
+
+			Ray ray;
+			ray.o = ( float4 )( hitPoint + normalFacing * EPSILON, 0.0f );
+			ray.d = ( float4 )( newDir, r->d.w );
+			ray.extra.x = idx;
+
+			int _idx = atomic_inc( nOutRays );
+			outRays[_idx] = ray;
+
+			Path_AddContribution( path, output, idx, emissive );
+			//contrib = emissive * Path_GetThroughput( path );			
+			Path_MulThroughput( path, color * dot( newDir, normalFacing ) );
+
 		}
-		/*const int flt = 0;
-		const float3 color   = ((hitSphereID % 2) == 0)  ? makeFloat3(0.75f, 0.75f, 0.75f) : makeFloat3(0.0f, 0.0f, 0.0f);
-		const float3 emissive = ((hitSphereID % 2) == 0) ? makeFloat3(0.0f, 0.0f, 0.0f) : makeFloat3(32.0f, 32.0f, 32.0f);
-
-		float3 hitPoint = difGeo.p;
-
-		float3 normal = difGeo.n;
-		float3 normalFacing = dot(normal, ray.d.xyz) < 0.0f ? normal : normal * ( -1.0f );
-
-		float3 newDir;
-
-		if ( flt == 0 )
+		else
 		{
-			float rand1 = 2.0f * PI * getRandom( seed0, seed1 );
-			float rand2 = getRandom( seed0, seed1 );
-			float rand2s = sqrt( rand2 );
-
-			float3 w = normalFacing;
-			float3 axis = fabs( w.x ) > 0.1f ? ( float3 )( 0.0f, 1.0f, 0.0f ) : ( float3 )( 1.0f, 0.0f, 0.0f );
-			float3 u = normalize( cross( axis, w ) );
-			float3 v = cross( w, u );
-
-			newDir = normalize( u * cos( rand1 )*rand2s + v*sin( rand1 )*rand2s + w*sqrt( 1.0f - rand2 ) );
-		} else
-		{
-			newDir = normalize( ray.d.xyz - normalFacing * 2.0f * dot( normalFacing, ray.d.xyz ));
+			contrib = makeFloat3( 0.0f, 0.0f, 0.0f );
+			Path_MulThroughput( path, contrib );
+			//Path_AddContribution( path, accum, idx, makeFloat3( 0.3f, 0.64f, 0.95f ) );
 		}
-
-
-		ray.o = (float4)(hitPoint + normalFacing * EPSILON, 0.0f);
-		ray.d = (float4)(newDir, ray.d.w);
-
-
-		if ( mask.x <= 0.001f ) mask.x = 0.0f;
-		if ( mask.y <= 0.001f ) mask.y = 0.0f;
-		if ( mask.z <= 0.001f ) mask.z = 0.0f;
-
-		accumDist += t;*/
-		//accumColor += mask * (emissive/* / accumDist*accumDist */);
-		//mask *= color;
-
-		//mask *= dot( newDir, normalFacing );
-
 	}
 
+}
+
+
+__kernel void Accumulate(
+		         int	 numPixel,	//0
+		__global float3* accum,		//1
+		__global float3* output,    //2
+		unsigned int     width,		//3
+		unsigned int     height,	//4
+	    unsigned int     frame      //5
+	)
+{
+	int globalID = get_global_id( 0 );
+
+	// check for work
+	if ( globalID < numPixel )
+	{
+		int x_coord = globalID % width;
+		int y_coord = globalID / width;
+
+		float fx = ( ( float ) ( x_coord + 0.0001f ) / ( float ) width ) * 2.0f - 1.0f;
+		float fy = ( ( float ) ( y_coord + 0.0001f ) / ( float ) height ) * 2.0f - 1.0f;
+
+		union Colour { float c; uchar4 components; } fcolour;
+
+		float3 rawColor =  accum[globalID] * native_recip( frame );
+		float3 finalColor = rawColor / ( rawColor + 1.0f );
+
+		fcolour.components = ( uchar4 )
+			    ( ( unsigned char )( ( finalColor.x ) * 255 ),
+			      ( unsigned char )( ( finalColor.y ) * 255 ),
+				  ( unsigned char )( ( finalColor.z ) * 255 ),
+				  1 );
+
+		output[globalID] = ( float3 )( fx, fy, fcolour.c );
+
+	}
 }

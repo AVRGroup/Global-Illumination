@@ -181,6 +181,7 @@
     <None Include="src\kernels\CL\bvh.cl" />
     <None Include="src\kernels\CL\camera.cl" />
     <None Include="src\kernels\CL\integrator_pt.cl" />
+    <None Include="src\kernels\CL\material.cl" />
     <None Include="src\kernels\CL\opencl_kernel.cl" />
     <None Include="src\kernels\CL\common.cl" />
     <None Include="src\kernels\CL\path.cl" />

@@ -39,6 +39,7 @@ void PerspectiveCamera_GeneratePaths(
 	// RNG seed
 	int rngSeed,
 	// Sampler data
+	__global Rng* rngs,
 	// Ouput
 	__global Ray* rays,
 	__global Path* paths
@@ -54,7 +55,7 @@ void PerspectiveCamera_GeneratePaths(
 	{
 		// get pointer to the ray
 		__global Ray* mRay = rays + ( globalID.y*imgWidth ) + globalID.x;
-		__global Path* mPath = paths + ( globalID.y*imgWidth ) + globalID.x;
+		__global Path* mPath = paths + gID;
 
 		// Prepare RNG
 		Rng rng;
@@ -85,10 +86,12 @@ void PerspectiveCamera_GeneratePaths(
 		Ray_SetPixel(mRay, gID);
 
 		// Initialize path data
-		mPath->throughput = makeFloat3(1.0f, 1.0f, 1.0f);
+		mPath->throughput = (float3)(1.0f, 1.0f, 1.0f);
 		mPath->volume = -1;
 		mPath->flags = 0;
 		mPath->active = 0xFF;
+
+		rngs[gID] = rng;
 	}
 }
 

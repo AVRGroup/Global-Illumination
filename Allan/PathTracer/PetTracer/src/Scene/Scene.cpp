@@ -1,6 +1,7 @@
 #include "Scene.h"
 #include "../BVH/BVH.h"
 #include "../BVH/PlainBVHTranslator.h"
+#include "TracerTypes.h"
 
 #include "tiny_obj_loader.h"
 
@@ -14,6 +15,7 @@ namespace PetTracer
 		  mVerticesPosition( context, ReadOnly ),
 		  mVerticesNormal( context, ReadOnly ),
 		  mVerticesTexCoord( context, ReadOnly ),
+		  mMaterialList( context, ReadOnly ),
 		  mBVHNodes( context, ReadOnly )
 	{
 
@@ -26,6 +28,7 @@ namespace PetTracer
 		  mVerticesPosition( context, ReadOnly ),
 		  mVerticesNormal( context, ReadOnly ),
 		  mVerticesTexCoord( context, ReadOnly ),
+		  mMaterialList( context, ReadOnly ),
 		  mBVHNodes( context, ReadOnly )
 	{
 		OpenFile( filePath, uploadscene );
@@ -77,6 +80,7 @@ namespace PetTracer
 			mVerticesPosition.Alloc( mVertexCount );
 			mVerticesTexCoord.Alloc( mVertexCount );
 			mVerticesNormal.Alloc( mVertexCount );
+			mMaterialList.Alloc( materials.size() );
 
 
 			{
@@ -88,7 +92,7 @@ namespace PetTracer
 				uint32  idxOff = 0;
 
 				// Fill the buffer with scene data
-				int32 shapeID = 2;
+				int32 shapeID = 0;
 				for ( tinyobj::shape_t& shape : shapes )
 				{
 					tinyobj::mesh_t& mesh = shape.mesh;
@@ -96,7 +100,7 @@ namespace PetTracer
 					uint32 idxCount = (uint32) mesh.indices.size() / 3;
 					bool hasTexCor = mesh.texcoords.size() != 0;
 					bool hasNormal = mesh.normals.size() != 0;
-
+					
 					for ( uint32 i = 0; i < vtxCount; i++ )
 					{
 						vtxPos[i + vtxOff] = float4( mesh.positions[i * 3], mesh.positions[i * 3 + 1], mesh.positions[i * 3 + 2] );
@@ -106,12 +110,47 @@ namespace PetTracer
 
 					for ( uint32 i = 0; i < idxCount; i++ )
 					{
-						triIdx[i + idxOff] = int4( mesh.indices[i * 3] + vtxOff, mesh.indices[i * 3 + 1] + vtxOff, mesh.indices[i * 3 + 2] + vtxOff, shapeID );
+						triIdx[i + idxOff] = int4( mesh.indices[i * 3] + vtxOff, mesh.indices[i * 3 + 1] + vtxOff, mesh.indices[i * 3 + 2] + vtxOff, mesh.material_ids[i]/*shapeID*/ );
 					}
 
 					vtxOff += vtxCount;
 					idxOff += idxCount;
-					//shapeID;
+					shapeID++;
+				}
+			}
+
+			// Check for materials
+			{
+				uint32    materialID = 0;
+				Material* materialList = mMaterialList.GetPointer();
+
+				for ( tinyobj::material_t& mat : materials )
+				{
+					/*std::cout << std::endl;
+					std::cout << "Name: " << mat.name << std::endl;
+					std::cout << "Ambient: (" << mat.ambient[0] << ", " << mat.ambient[1] << ", " << mat.ambient[2] << ") texName: " << mat.ambient_texname << std::endl;
+					std::cout << "Diffuse: (" << mat.diffuse[0] << ", " << mat.diffuse[1] << ", " << mat.diffuse[2] << ") texName: " << mat.diffuse_texname << std::endl;
+					std::cout << "Dissolve: " << mat.dissolve << std::endl;
+					std::cout << "Emission: (" << mat.emission[0] << ", " << mat.emission[1] << ", " << mat.emission[2] << ")" << std::endl;
+					std::cout << "IoR: " << mat.ior << std::endl;
+					std::cout << "Normal Map: " << mat.normal_texname << std::endl;
+					std::cout << "Shininess: " << mat.shininess / 1.956f << std::endl;
+					std::cout << "Specular: (" << mat.specular[0] << ", " << mat.specular[1] << ", " << mat.specular[2] << ") texName: " << mat.specular_texname << std::endl;
+					std::cout << "Transmittance: (" << mat.transmittance[0] << ", " << mat.transmittance[1] << ", " << mat.transmittance[2] << ") " << std::endl;
+					std::cout << "#######################################" << std::endl;*/
+
+					float4 albedo( mat.diffuse[0], mat.diffuse[1], mat.diffuse[2] );
+					float4 specular( mat.specular[0], mat.specular[1], mat.specular[2] );
+					float  metallic = clamp( mat.ior - 1, 0.0f, 1.0f );
+					float4 baseColor = lerp( albedo, specular, metallic );
+
+					Material& nMaterial =materialList[materialID];
+					nMaterial.albedo = { baseColor.x, baseColor.y, baseColor.z };
+					nMaterial.emissive = { mat.emission[0], mat.emission[1], mat.emission[2] };
+					nMaterial.roughness = mat.shininess / 1000.0f;
+					nMaterial.metallic = metallic;
+
+					materialID++;
 				}
 			}
 
@@ -133,6 +172,7 @@ namespace PetTracer
 		mVerticesPosition.UploadToGPU( block );
 		mVerticesTexCoord.UploadToGPU( block );
 		mVerticesNormal.UploadToGPU( block );
+		mMaterialList.UploadToGPU( block );
 
 		if ( mBVHNodes.GetSize() != 0 )
 			mBVHNodes.UploadToGPU( block );

@@ -39,7 +39,7 @@ void IntersectLeafClosest(
 	{
 		inter->primID = start;
 		inter->shapeID = face.w;
-		//inter->uvwt.xyz = normalize( cross(v2 - v1, v3 - v1) );
+		inter->uvwt.xyz = normalize( cross(v2 - v1, v3 - v1) );
 	}
 }
 

@@ -93,6 +93,9 @@
     <None Include="src\kernels\CL\scene.cl">
       <Filter>Source Files\kernels\CL</Filter>
     </None>
+    <None Include="src\kernels\CL\material.cl">
+      <Filter>Source Files\kernels\CL</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\math\MathUtils.h">
