@@ -4,9 +4,12 @@
 #ifndef COMMON_CL
 #define COMMON_CL
 
+#include <material.cl>
+
 #define PI 3.14159265358979323846f
 #define EPSILON 0.00003f
 #define MINIMUM_THROUGHPUT 0.0f
+#define NON_ZERO(x) (length(x) > EPSILON)
 //#define INFINITY 1e20f
 
 typedef struct _bbox
@@ -44,6 +47,7 @@ typedef struct _differentialGeometry
 	float3 dpdv;
 	float area;
 	// Maybe material later
+	Material mat;
 
 } DifferentialGeometry;
 
@@ -72,6 +76,30 @@ float2 makeFloat2( float x, float y )
 	res.x = x;
 	res.y = y;
 	return res;
+}
+
+
+float3 GetOrthoVector( float3 n )
+{
+	float3 p;
+
+	if ( n.x != n.y || n.x != n.z )
+		p = makeFloat3( n.z - n.y, n.x - n.z, n.y - n.x ); // (1, 1, 1) x N
+	else
+		p = makeFloat3( n.z - n.y, n.x + n.z, n.y - n.x ); // (-1, 1, 1) x N
+
+	/*if ( fabs( n.z ) > 0.f )
+	{
+		float k = sqrt( n.y*n.y + n.z*n.z );
+		p.x = 0; p.y = -n.z / k; p.z = n.y / k;
+	}
+	else
+	{
+		float k = sqrt( n.x*n.x + n.y*n.y );
+		p.x = n.y / k; p.y = -n.x / k; p.z = 0;
+	}*/
+
+	return normalize( p );
 }
 
 #endif

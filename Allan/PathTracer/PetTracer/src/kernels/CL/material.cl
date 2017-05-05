@@ -31,8 +31,12 @@ typedef struct _material
 		float ior;
 		float roughness;
 	};
-
-	float metallic;
+	
+	union
+	{
+		float fresnel;
+		float metallic;
+	};
 
 } Material;
 

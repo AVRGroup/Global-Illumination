@@ -179,6 +179,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="src\kernels\CL\bvh.cl" />
+    <None Include="src\kernels\CL\bxdf.cl" />
     <None Include="src\kernels\CL\camera.cl" />
     <None Include="src\kernels\CL\integrator_pt.cl" />
     <None Include="src\kernels\CL\material.cl" />

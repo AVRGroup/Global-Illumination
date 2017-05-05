@@ -7,6 +7,7 @@
 #include <camera.cl>
 #include <scene.cl>
 #include <material.cl>
+#include <bxdf.cl>
 
 void IntersectScene( SceneData const* scenedata, Ray* r, Intersection* isect )
 {
@@ -69,132 +70,436 @@ __kernel void IntersectClosest(
 		Ray r = rays[globalID];
 
 		
+		if ( Ray_IsActive( &r ) )
+		{
+			Intersection isect;
+			IntersectScene( &scenedata, &r, &isect );
 
-		Intersection isect;
-		IntersectScene( &scenedata, &r, &isect );
-
-		hits[globalID] = isect;
-
+			hits[globalID] = isect;
+		}
 	}
+}
+
+__kernel void EvaluateVolume(
+	// Rays
+	__global	Ray			const*	rays,
+	// Pixel indices
+	__global	int			const*	pixelIndices,
+	// Number of rays
+	__global	int			const*	numRays,
+	// Volumes
+				int					volumes,
+	// Textures
+				int					textures,
+				int					textureData,
+	// RNG seed
+				uint				rngseed,
+	// Sampler state
+	__global	uint			 *	random,
+				int					randomUtil,
+	// Current pass
+				int					bounce,
+	// Current frame
+				int					frame,
+	// Intersection data
+	__global	Intersection	 *	isects,
+	// Current paths
+	__global	Path			 *	paths,
+	// Output
+	__global	float3			 *	output
+)
+{
+	int globalID = get_global_id( 0 );
+
+	if(globalID < *numRays)
+	{
+		int pixelID = pixelIndices[globalID];
+
+		__global Path* path = paths + pixelID;
+
+		// Path can be dead
+		if ( !Path_IsAlive( path ) )
+			return;
+
+		int volID = Path_GetVolumeIndex( path );
+
+		// Check if we are inside some volume
+		if( volID != 1 )
+		{
+		
+		}
+	}
+
+}
+
+__kernel void FilterPathStream(
+	// Intersections
+	__global Intersection	const*	isects,
+	// Number of compacted indices
+	__global int			const*	numItens,
+	// Pixel indices
+	__global int			const*	pixelIndices,
+	// Paths
+	__global Path				 *	paths,
+	// Predicate
+	__global int				 *	predicate
+)
+{
+	int globalID = get_global_id( 0 );
+
+	if(globalID < *numItens)
+	{
+		int pixelID = pixelIndices[globalID];
+
+		__global Path* path = paths + pixelID;
+
+		if (Path_IsAlive(path))
+		{
+			bool kill = ( length( Path_GetThroughput( path ) ) < 0.001f ); // See here later
+
+			if(!kill)
+			{
+				predicate[globalID] = isects[globalID].primID >= 0 ? 1 : 0;
+			}
+			else
+			{
+				Path_Kill( path );
+				predicate[globalID] = 0;
+			}
+		}
+		else
+		{
+			predicate[globalID] = 0;
+		}
+	}
+}
+
+__kernel void RestorePixelIndices(
+	// Compacted indices
+	__global int	const * compactedIndices,
+	// Number of compacted indices
+	__global int	const*	numItens,
+	// Previous pixel indices
+	__global int	const*	prevIndices,
+	// New pixel indices
+	__global int		 *	newIndices
+)
+{
+	int globalID = get_global_id( 0 );
+
+	if(globalID < *numItens)
+	{
+		newIndices[globalID] = prevIndices[compactedIndices[globalID]];
+	}
+
+}
+
+__kernel void ShadeMiss(
+	// Rays
+	__global Ray			const*	rays,
+	// Intersections
+	__global Intersection	const*	isects,
+	// Pixel indices
+	__global int			const*	pixelIndices,
+	// Number of rays
+			 int					numRays,
+	// Textures
+			 int					textures,
+			 int					textureData,
+	// Enviroment map ID
+			 int					envmapID,
+	// Path
+	__global Path			const*	paths,
+	// Volumes
+			 int					volumes,
+	// Output volume
+	__global float4*				output
+)
+{
+	int globalID = get_global_id( 0 );
+
+	if(globalID < numRays)
+	{
+		int pixelID = pixelIndices[globalID];
+
+		// In case of a miss
+		if( isects[globalID].shapeID < 0 )
+		{
+			int volID = paths[pixelID].volume;
+
+			// If the ray didnt pass a volume
+			if(volID == -1)
+			{
+				//Apply the enviroment map
+				output[pixelID].xyzw += makeFloat4( 0.1f, 0.125f, 0.137f, 1.0f );
+			}
+			else
+			{
+				// Apply volume emission
+			}
+
+		}
+	}
+}
+
+__kernel void ShadeVolume(
+	// Rays
+	__global Ray			const*	rays,
+	// Intersection data
+	__global Intersection	const*	isects,
+	// Hit indices
+	__global int			const*	hitIndices,
+	// Pixel indices
+	__global int			const*	pixelIndices,
+	// Number of rays
+	__global int			const*	numRays,
+	// Vertices
+	__global float3			const*	vertices,
+	// Normals
+	__global float3			const*	normals,
+	// UVs
+	__global float2			const*	uvs,
+	// Indices
+	__global int			const*	indices,
+	// Shapes
+			 int					shapes,
+	// Material IDs
+			 int					materialIDS,
+	// Materials
+	__global Material		const*	materials,
+	// Textures
+			 int					textures,
+			 int					textureData,
+	// Enviroment map id
+			 int					envmapidx,
+	// Envmap multiplier
+			 float					envmapmul,
+	// Emissives
+			 int					lights,
+	// Number of emissive objects
+			 int					num_lights,
+	// RNG seed
+			 uint					rngSeed,
+	// Sampler state
+	__global uint				 *	random,
+	// Sobol matrices
+			 uint					sobolmat,
+	// Current bounce
+			 int					bounce,
+	// Current frame
+			 int					frame,
+	// Volume data
+			 int					volumes,
+	// Shadow rays
+	__global Ray				 *	shadowRays,
+	// Light samples
+			 int					lightSamples,
+	// Path throughput
+	__global Path				 *	paths,
+	// Indirect rays (next path segment)
+	__global Ray				 *	indirectrays,
+	// Radiance
+	__global float3				 *	output
+)
+{
+
 }
 
 __kernel void ShadeSurface(
 	// Rays
-	__global Ray          const*    rays,
-	// Output Rays
-	__global Ray   		  	   *	outRays,
+	__global Ray			const*  rays,
 	// Intersections
-	__global Intersection const*    isects,
+	__global Intersection	const*  isects,
+	// Hit indices
+	__global int			const*	hitIndices,
+	// Pixel indices
+	__global int			const*	pixelIndices,
 	// Number of rays
-	__global int          const*    numRays,
-	// Number of output rays
-	__global int 		       *    nOutRays,
+	__global int			const*	numRays,
 	// Geometry vertices
-	__global float3       const*    vertices,
+	__global float3			const*	vertices,
 	// Geometry normals
-	__global float3       const*    normals,
+	__global float3			const*	normals,
 	// Geometry UVs
-	__global float4       const*    uvs,
+	__global float2			const*	uvs,
 	// Indices
-	__global int4         const*    indices,
-	// Surfaces
-	// TODO
+	__global int4			const*	indices,
+	// Shapes
+			 int					shapes,
+	// Material Indices
+			 int					materialIds,
 	// Materials
-	__global Material	  const*    materials,
+	__global Material		const*  materials,
+	// Texture
+			 int					textures,
+			 int					textureData,
+	// Enviroment map texture ID
+			 int					envmapID,
+	// Enviroment map multiplier
+			 float					envmapMul,
+	// Emissives
+			 int					lights,
+	// Number of emissive objects
+			 int					numLights,
 	// RNG seed
 	         uint					rngSeed,
 	// Sampler states
-	__global Rng 			   * 	random,
+	__global uint 				 *	random,
+	// Sobol matices
+			 int					sobolMat,
 	// Current Bounce
 	         int 					bounce,
 	// Current frame
-	//		 int 					frame,
+			 int 					frame,
+	// Volume data
+			 int					volume,
+	// Shadow
+			 int					shadowRays,
+	// Light samples
+			 int					lightSamples,
 	// Path data
-	__global Path 			   * 	paths,
+	__global Path 				 *	paths,
+	// Indirect rays
+	__global Ray				 *	indirectRays,
 	// Radiance accum buffer
-	__global float3 		   * 	output
+	__global float3 			 *	output
 
 )
 {
 	int globalID = get_global_id(0);
 
-	Scene scene = {
+	Scene scene =
+	{
 		vertices,
 		normals,
 		uvs,
-		indices
+		indices,
+		materials
 	};
 
 	if(globalID < *numRays)
 	{
-		__global Ray  		  const* r     = rays   + globalID;
-		__global Intersection const* isect = isects + globalID;
-				 int         		 idx   = Ray_GetPixel(r);
-		__global Path 		  const* path  = paths  + idx;
-		//__global float3			   * accum = output + idx;
+		int			 hitID	 = hitIndices[globalID];
+		int			 pixelID = pixelIndices[globalID];
+		Intersection isect   = isects[hitID];
 
+		__global Path* path  = paths + pixelID;
 
-
-		float3 contrib;
-		if ( isect->shapeID != -1 && length(Path_GetThroughput(path)) > EPSILON )
+		// Exit if path has been scattered
+		if( Path_IsScattered(path) )
 		{
+			return;
+		}
 
-			const int flt = 0;
-			__global Material *mat = materials + isect->shapeID;
-			const float3 color    = mat->albedo.xyz;
-			const float3 emissive = mat->emissive.xyz;
-			/*const float3 color    = ( ( isect->shapeID % 2 ) == 0 ) ? makeFloat3( 0.75f, 0.75f, 0.75f ) : makeFloat3( 00.0f, 00.0f, 00.0f );
-			const float3 emissive = ( ( isect->shapeID % 2 ) == 0 ) ? makeFloat3( 0.00f, 0.00f, 0.00f ) : makeFloat3( 2.0f, 2.0f, 2.0f );*/
 
-			float3 hitPoint = r->o.xyz + isect->uvwt.w * r->d.xyz;
+		// Incoming ray direction
+		float3 wi = -normalize( rays[hitID].d.xyz );
 
-			float3 normal = isect->uvwt.xyz;
-			float3 normalFacing = dot( normal, r->d.xyz ) < 0.0f ? normal : normal * ( -1.0f );
+		Sampler sampler;
+#if SAMPLER == RANDOM
+		uint scramble = pixelID * rngSeed;
+		Sampler_Init( &sampler, scramble );
+#elif SAMPLER == CMJ
+		uint rnd = random[pixelID];
+		uint scramble = rnd * 0x1fe3434f * ( ( frame + 331 * rnd ) / ( CMJ_DIM * CMJ_DIM ) );
+		Sampler_Init( &sampler, frame % ( CMJ_DIM * CMJ_DIM ), SAMPLE_DIM_SURFACE_OFFSET + bounce * SAMPLE_DIMS_PER_BOUNCE, scramble );
+#endif
 
-			float3 newDir;
+		// Fill surface data
+		DifferentialGeometry diffgeo;
+		DifferentialGeometry_Fill( &scene, &isect, &diffgeo );
 
-			if ( flt == 0 )
+		// Check if its a backface
+		float ngdotwi = dot( diffgeo.ng, wi );
+		bool backfacing = ngdotwi < 0.0f;
+
+		float3 throughput = Path_GetThroughput( path );
+
+		// If the material iss emissive, add the contribution and terminate
+		if( NON_ZERO(diffgeo.mat.emissive) )
+		{
+			if ( !backfacing )
 			{
-				Rng seed0 = random[idx];
-				seed0.val += rngSeed + ( globalID << 2 ) * 157 + 13;
+				float weight = 1.f;
 
-				float rand1 = 2.0f * PI *  RandFloat( &seed0 );
-				float rand2 = RandFloat( &seed0 );
-				float rand2s = sqrt( rand2 );
+				if ( bounce > 0 && !Path_IsSpecular( path ) )
+				{
+					float2 extra = Ray_GetExtra( &rays[hitID] );
+					float ld = isect.uvwt.w;
+					float denom = fabs( dot( diffgeo.n, wi ) ) * diffgeo.area;
+					// TODO: num_lights should be num_emissies instead, presence of analytical lights breaks this code
+					float bxdflightpdf = denom > 0.f ? ( ld * ld / denom / 2) : 0.f;
+					weight = BalanceHeuristic( 1, extra.x, 1, bxdflightpdf );
+				}
 
-				float3 w = normalFacing;
-				float3 axis = fabs( w.x ) > 0.1f ? ( float3 )( 0.0f, 1.0f, 0.0f ) : ( float3 )( 1.0f, 0.0f, 0.0f );
-				float3 u = normalize( cross( axis, w ) );
-				float3 v = cross( w, u );
-
-				newDir = normalize( u * cos( rand1 )*rand2s + v*sin( rand1 )*rand2s + w*sqrt( 1.0f - rand2 ) );
-				
-				random[idx] = seed0;
+				output[pixelID] += throughput * 100 * diffgeo.mat.emissive.xyz * weight;
 			}
-			else
-			{
-				newDir = normalize( r->d.xyz - normalFacing * 2.0f * dot( normalFacing, r->d.xyz ) );
-			}
+			Path_Kill( path );
+			Ray_SetInactive( indirectRays + globalID );
+			
+			return;
+		}
+
+		// Invert normal if hit the face inside
+		float s = 1.0f;
+		if( backfacing )
+		{
+			diffgeo.n = -diffgeo.n;
+			diffgeo.dpdu = -diffgeo.dpdu;
+			diffgeo.dpdv = -diffgeo.dpdv;
+			s = -s;
+		}
+
+		//float ndotwi = fabs( dot( diffgeo.n, wi ) );
+
+		float2 bxdfSampler = Sampler_Sample2D( &sampler );
+		float3 bxdfwo;
+		float bxdfpdf;
+		float3 bxdf = Bxdf_Sample( &diffgeo, wi, bxdfSampler, &bxdfwo, &bxdfpdf );
 
 
-			Ray ray;
-			ray.o = ( float4 )( hitPoint + normalFacing * EPSILON, 0.0f );
-			ray.d = ( float4 )( newDir, r->d.w );
-			ray.extra.x = idx;
+		// Apply Russian roulette
+		float q = max( min( 0.5f,
+			// Luminance
+			0.2126f * throughput.x + 0.7152f * throughput.y + 0.0722f * throughput.z ), 0.01f );
+		// Only apply if is 3+ bounces
+		bool rrApply = bounce > 3;
+		bool rrStop = Sampler_Sample1D( &sampler ) > q && rrApply;
 
-			int _idx = atomic_inc( nOutRays );
-			outRays[_idx] = ray;
+		if(rrApply)
+		{
+			Path_MulThroughput( path, native_recip(q) );
+		}
 
-			Path_AddContribution( path, output, idx, emissive );
-			//contrib = emissive * Path_GetThroughput( path );			
-			Path_MulThroughput( path, color * dot( newDir, normalFacing ) );
 
+		bxdfwo = normalize( bxdfwo );
+		float3 t = bxdf * fabs( dot( diffgeo.n, bxdfwo ) );
+		/*if ( true )
+		{
+			float2 sample = Sampler_Sample2D( &sampler );
+			float rand1 = 2.0f * PI * sample.x;
+			float rand2 = sample.y;
+			float rand2s = sqrt( rand2 );
+
+			newDir = normalize( diffgeo.dpdu * cos( rand1 )*rand2s + diffgeo.dpdv*sin( rand1 )*rand2s + diffgeo.n*sqrt( 1.0f - rand2 ) );
+		}*/
+
+		// Only continue if we have non-zero throughput & pdf
+		if( NON_ZERO(t) && bxdfpdf > 0.0f && !rrStop )
+		{
+			Path_MulThroughput( path, t / bxdfpdf /*diffgeo.mat.albedo.xyz * dot( newDir, diffgeo.n )*/ );
+
+			float3 indirectRayOrigin = diffgeo.p + 0.001f * s *diffgeo.ng;
+
+			// Generate Ray
+			Ray_Init( indirectRays + globalID, indirectRayOrigin, bxdfwo, 1000000.f, 0.0f, 0xFFFFFFFF );
+			Ray_SetExtra( indirectRays + globalID, makeFloat2( bxdfpdf, 0.0f ) );
 		}
 		else
 		{
-			contrib = makeFloat3( 0.0f, 0.0f, 0.0f );
-			Path_MulThroughput( path, contrib );
-			//Path_AddContribution( path, accum, idx, makeFloat3( 0.3f, 0.64f, 0.95f ) );
+			// Otherwise kill the path
+			Path_Kill( path );
+			Ray_SetInactive( indirectRays + globalID );
 		}
 	}
 

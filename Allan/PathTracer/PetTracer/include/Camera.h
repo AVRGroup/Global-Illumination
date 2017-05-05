@@ -39,6 +39,9 @@ namespace PetTracer
 		void SetDepthRange( float2 const& range );
 		float2 GetDepthRange() const;
 
+		// Get camera position
+		void SetPosition( float3 position );
+		float3 GetPosition() const;
 		
 		// Rotate camera around world Z axis
 		void Rotate( float angle );

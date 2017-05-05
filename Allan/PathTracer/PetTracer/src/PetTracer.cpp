@@ -14,6 +14,7 @@
 
 #include <ctime>
 #include <chrono>
+#include <numeric>
 
 #include "tiny_obj_loader.h"
 
@@ -49,9 +50,16 @@ namespace PetTracer
 			mIntersections		= CLWBuffer<CLTypes::Intersection>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels );
 			mAccumBuffer		= CLWBuffer<float3>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels );
 			mCamera				= CLWBuffer<Camera>::Create( mOpenCLContext, CL_MEM_READ_ONLY, 1 );
-			mHitCount[0]		= CLWBuffer<int32>::Create( mOpenCLContext, CL_MEM_READ_WRITE, 1 );
-			mHitCount[1]		= CLWBuffer<int32>::Create( mOpenCLContext, CL_MEM_READ_WRITE, 1 );
-			mRNGState			= CLWBuffer<uint32>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels );
+			mHitCount			= CLWBuffer<int32>::Create( mOpenCLContext, CL_MEM_READ_WRITE, 1 );
+			std::vector<uint32> initdata( numPixels );
+			std::iota( initdata.begin(), initdata.end(), 0 );
+			mIota				= CLWBuffer<int32>::Create( mOpenCLContext, CL_MEM_READ_ONLY, numPixels, &initdata[0] );
+			mPixelIndices[0]	= CLWBuffer<int32>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels );
+			mPixelIndices[1]	= CLWBuffer<int32>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels );
+			mCompactedIndices	= CLWBuffer<int32>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels );
+			mHits				= CLWBuffer<int32>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels );
+			for ( uint32& n : initdata ) n = rand();
+			mRNGState			= CLWBuffer<uint32>::Create( mOpenCLContext, CL_MEM_READ_WRITE, numPixels, &initdata[0] );
 			/***/
 
 			UploadCamera();
@@ -93,6 +101,7 @@ namespace PetTracer
 			mOpenCLKernel.SetArg( 7, rand() / RAND_MAX );*/
 
 			mKPerspectiveCamera.SetArg( 3, rand() );
+			mKPerspectiveCamera.SetArg( 5, mIteration );
 			
 			if(mTrace)RunKernel();
 			
@@ -156,6 +165,8 @@ namespace PetTracer
 			case SDLK_z:
 				mPerpectiveCamera.Rotate( 3.141565f * 0.5f );
 				break;
+			case SDLK_SPACE:
+				std::cout << "Camera position: " << mPerpectiveCamera.GetPosition() << std::endl;
 			}
 		}
 
@@ -236,24 +247,14 @@ namespace PetTracer
 			std::srand( static_cast<unsigned int>( time( 0 ) ) );
 			unsigned int seed = ( unsigned ) std::rand();
 
-			// Setup each kernel with its data
-			/*mOpenCLKernel.SetArg( 0,  mScreenWidth );
-			mOpenCLKernel.SetArg( 1,  mScreenHeight );
-			mOpenCLKernel.SetArg( 2,  mVertexBufferGL );
-			mOpenCLKernel.SetArg( 3,  seed );
-			mOpenCLKernel.SetArg( 5,  mRayBuffer[0] );
-			mOpenCLKernel.SetArg( 8,  mAccumBuffer );
-			mOpenCLKernel.SetArg( 9,  mScene->VerticesPositionBuffer() );
-			mOpenCLKernel.SetArg( 10, mScene->TriangleIndexBuffer() );
-			mOpenCLKernel.SetArg( 11, mScene->BVHNodeBuffer() );*/
-
 			mKPerspectiveCamera.SetArg( 0, mCamera );
 			mKPerspectiveCamera.SetArg( 1, mScreenWidth );
 			mKPerspectiveCamera.SetArg( 2, mScreenHeight );
 			mKPerspectiveCamera.SetArg( 3, seed );
 			mKPerspectiveCamera.SetArg( 4, mRNGState );
-			mKPerspectiveCamera.SetArg( 5, mRayBuffer[0] );
-			mKPerspectiveCamera.SetArg( 6, mPathBuffer );
+			mKPerspectiveCamera.SetArg( 5, mIteration );
+			mKPerspectiveCamera.SetArg( 6, mRayBuffer[0] );
+			mKPerspectiveCamera.SetArg( 7, mPathBuffer );
 
 			mKIntersectScene.SetArg( 0, mScene->VerticesPositionBuffer() );
 			mKIntersectScene.SetArg( 1, mScene->TriangleIndexBuffer() );
@@ -264,7 +265,7 @@ namespace PetTracer
 			mKIntersectScene.SetArg( 6, mVertexBufferGL );
 			mKIntersectScene.SetArg( 7, mScreenWidth );
 			mKIntersectScene.SetArg( 8, mScreenHeight );
-			mKIntersectScene.SetArg( 9, mHitCount[0] );
+			mKIntersectScene.SetArg( 9, mHitCount );
 		}
 
 		void RunKernel()
@@ -276,17 +277,47 @@ namespace PetTracer
 			GeneratePrimaryRays();
 
 			// Copy indices
-			FillBuffer( mHitCount[0], maxRays, 1 );
+			mOpenCLContext.CopyBuffer( 0, mIota, mPixelIndices[0], 0, 0, mIota.GetElementCount() );
+			mOpenCLContext.CopyBuffer( 0, mIota, mPixelIndices[1], 0, 0, mIota.GetElementCount() );
+			mOpenCLContext.FillBuffer( 0, mHitCount, maxRays, 1 );
 
 
 			for ( int32 pass = 0; pass < 5; pass++)
 			{
+				mOpenCLContext.FillBuffer( 0, mHits, 0, mHits.GetElementCount() );
 
+				// Intersect rays
 				TraceRays( pass );
 
-				FillBuffer( mHitCount[(pass+1) & 0x1], 0, 1 );
+				// Apply scattering
+				EvaluateVolume( pass );
+
+				if ( pass > 0 && false ) // have envmap
+				{
+					// Shade Background
+				}
+
+				// Convert intersections to predicates
+				FilterPathStream( pass );
+
+				// Compact rays
+				mPP.Compact( 0, mHits, mIota, mCompactedIndices, mHitCount );
+
+				/*int cnt = 0;
+				mOpenCLContext.ReadBuffer(0, mHitCount, &cnt, 1).Wait();
+				std::cout << "Pass " << pass << " Alive " << cnt << "\n";*/
+
+				// Advance indices to keep pixel indices up to date
+				RestorePixelIndices( pass );
+
+				// Shade hits
+				//ShadeVolume( pass );
 
 				ShadeSurface( pass );
+
+				// Shade missing rays
+				if ( pass == 0 )
+					ShadeMiss( pass );
 
 
 			}
@@ -333,11 +364,12 @@ namespace PetTracer
 			// Set up camera
 			mPerpectiveCamera.SetSensorSize( float2( ( float ) mScreenWidth / mScreenHeight, 1.0f ) * 0.0359999985f );
 			mPerpectiveCamera.SetFocalLength( 0.05f );
+			mPerpectiveCamera.SetPosition( float3( 0.0f, 1.0f, 4.2f ) );
 
 			{
 				std::cout << std::endl << "Opening Scene" << std::endl;
 				Timer<milliseconds> timer;
-				mScene = new Scene ( mOpenCLContext, "../../../data/orig2.obj" );
+				mScene = new Scene ( mOpenCLContext, "../../../data/orig.objm" );
 				std::cout << "Scene opened: " << timer.ElapsedTime() << "ms elapsed." << std::endl;
 				BuildParams params;
 				params.MaxLeafSize = 1;
@@ -385,43 +417,190 @@ namespace PetTracer
 			mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, mKPerspectiveCamera );
 		}
 
-		void TraceRays(int pass)
+		void TraceRays( int32 pass )
 		{
 			size_t local_work_size = 64;
 			size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
 
 			mKIntersectScene.SetArg( 3, mRayBuffer[pass & 0x1]);
-			mKIntersectScene.SetArg( 4, mHitCount[pass & 0x1] );
+			mKIntersectScene.SetArg( 4, mHitCount );
 
 			// launch the kernel
 			mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, mKIntersectScene ); // local_work_size
 		}
 
-		void ShadeSurface( int pass )
+		void EvaluateVolume( int32 pass )
 		{
-			size_t local_work_size = 64;
-			size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
+			CLWKernel evaluateKernel = mProgram.GetKernel( "EvaluateVolume" );
 
+			int32 arg = 0;
+			evaluateKernel.SetArg( arg++, mRayBuffer[pass & 0x1] );
+			evaluateKernel.SetArg( arg++, mPixelIndices[( pass + 1 ) & 0x1] );
+			evaluateKernel.SetArg( arg++, mHitCount );
+			evaluateKernel.SetArg( arg++, 0 );
+			evaluateKernel.SetArg( arg++, 0 );
+			evaluateKernel.SetArg( arg++, 0 );
+			evaluateKernel.SetArg( arg++, rand() );
+			evaluateKernel.SetArg( arg++, mRNGState );
+			evaluateKernel.SetArg( arg++, 0 );
+			evaluateKernel.SetArg( arg++, pass );
+			evaluateKernel.SetArg( arg++, mIteration );
+			evaluateKernel.SetArg( arg++, mIntersections );
+			evaluateKernel.SetArg( arg++, mPathBuffer );
+			evaluateKernel.SetArg( arg++, mAccumBuffer );
+
+			{
+				size_t local_work_size = 64;
+				size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
+				mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, evaluateKernel );
+			}
+		}
+
+		void FilterPathStream( int32 pass )
+		{
+			CLWKernel filterKernel = mProgram.GetKernel( "FilterPathStream" );
+
+			int32 arg = 0;
+			filterKernel.SetArg( arg++, mIntersections );
+			filterKernel.SetArg( arg++, mHitCount );
+			filterKernel.SetArg( arg++, mPixelIndices[(pass+1) & 0x1] );
+			filterKernel.SetArg( arg++, mPathBuffer );
+			filterKernel.SetArg( arg++, mHits );
+
+			{
+				size_t local_work_size = 64;
+				size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
+				mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, filterKernel );
+			}
+		}
+
+		void RestorePixelIndices( int32 pass )
+		{
+			CLWKernel restoreKernel = mProgram.GetKernel( "RestorePixelIndices" );
+
+			int32 arg = 0;
+			restoreKernel.SetArg( arg++, mCompactedIndices );
+			restoreKernel.SetArg( arg++, mHitCount );
+			restoreKernel.SetArg( arg++, mPixelIndices[( pass + 1 ) & 0x1] );
+			restoreKernel.SetArg( arg++, mPixelIndices[pass & 0x1] );
+
+			{
+				size_t local_work_size = 64;
+				size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
+				mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, restoreKernel );
+			}
+		}
+
+		void ShadeVolume( int32 pass )
+		{
+			CLWKernel shadeKernel = mProgram.GetKernel( "ShadeVolume" );
+
+			int32 arg = 0;
+			shadeKernel.SetArg( arg++, mRayBuffer[pass & 0x1] );
+			shadeKernel.SetArg( arg++, mIntersections );
+			shadeKernel.SetArg( arg++, mCompactedIndices );
+			shadeKernel.SetArg( arg++, mPixelIndices[pass & 0x1] );
+			shadeKernel.SetArg( arg++, mHitCount );
+			shadeKernel.SetArg( arg++, mScene->VerticesPositionBuffer() );
+			shadeKernel.SetArg( arg++, mScene->VerticesNormalBuffer() );
+			shadeKernel.SetArg( arg++, mScene->VerticesTexCoordBuffer() );
+			shadeKernel.SetArg( arg++, mScene->TriangleIndexBuffer() );
+			shadeKernel.SetArg( arg++, 0 );
+			shadeKernel.SetArg( arg++, 0 );
+			shadeKernel.SetArg( arg++, mScene->MaterialListBuffer() );
+			shadeKernel.SetArg( arg++, 0 );
+			shadeKernel.SetArg( arg++, 0 );
+			shadeKernel.SetArg( arg++, 0 );
+			shadeKernel.SetArg( arg++, 0 );
+			shadeKernel.SetArg( arg++, 0 ); // Lights
+			shadeKernel.SetArg( arg++, 0 ); // Num lights
+			shadeKernel.SetArg( arg++, rand() );
+			shadeKernel.SetArg( arg++, mRNGState );
+			shadeKernel.SetArg( arg++, 0 );
+			shadeKernel.SetArg( arg++, pass );
+			shadeKernel.SetArg( arg++, mIntersections );
+			shadeKernel.SetArg( arg++, 0 ); // Volumes
+			shadeKernel.SetArg( arg++, 0 ); // Shadow rays
+			shadeKernel.SetArg( arg++, 0 ); // lightsamples
+			shadeKernel.SetArg( arg++, mPathBuffer );
+			shadeKernel.SetArg( arg++, mRayBuffer[( pass + 1 ) & 0x1] );
+			shadeKernel.SetArg( arg++, mAccumBuffer );
+
+
+			{
+				size_t local_work_size = 64;
+				size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
+				mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, shadeKernel );
+			}
+		}
+
+		void ShadeSurface( int32 pass )
+		{
 			CLWKernel kernel = mProgram.GetKernel( "ShadeSurface" );
+			
 			int32 arg = 0;
 			kernel.SetArg( arg++, mRayBuffer[pass & 0x1] );
-			kernel.SetArg( arg++, mRayBuffer[( pass + 1 ) & 0x1] );
 			kernel.SetArg( arg++, mIntersections );
-			kernel.SetArg( arg++, mHitCount[pass & 0x1] );
-			kernel.SetArg( arg++, mHitCount[( pass + 1 ) & 0x1] );
+			kernel.SetArg( arg++, mCompactedIndices );
+			kernel.SetArg( arg++, mPixelIndices[pass & 0x1] );
+			kernel.SetArg( arg++, mHitCount );
 			kernel.SetArg( arg++, mScene->VerticesPositionBuffer() );
 			kernel.SetArg( arg++, mScene->VerticesNormalBuffer() );
 			kernel.SetArg( arg++, mScene->VerticesTexCoordBuffer() );
 			kernel.SetArg( arg++, mScene->TriangleIndexBuffer() );
+			kernel.SetArg( arg++, 0 ); // Shapes
+			kernel.SetArg( arg++, 0 ); // MAterial ids
 			kernel.SetArg( arg++, mScene->MaterialListBuffer() );
+			kernel.SetArg( arg++, 0 ); // Textures
+			kernel.SetArg( arg++, 0 ); // Texture Data
+			kernel.SetArg( arg++, 0 ); // Enviroment map
+			kernel.SetArg( arg++, 0 ); // envmapmult
+			kernel.SetArg( arg++, 0 ); // lights
+			kernel.SetArg( arg++, 0 ); // numlights
 			kernel.SetArg( arg++, rand() );
 			kernel.SetArg( arg++, mRNGState );
+			kernel.SetArg( arg++, 0 );
 			kernel.SetArg( arg++, pass );
+			kernel.SetArg( arg++, mIteration );
+			kernel.SetArg( arg++, 0 ); // Volumes
+			kernel.SetArg( arg++, 0 ); // Shadow rays
+			kernel.SetArg( arg++, 0 ); // lightsamples
 			kernel.SetArg( arg++, mPathBuffer );
+			kernel.SetArg( arg++, mRayBuffer[( pass + 1 ) & 0x1] );
 			kernel.SetArg( arg++, mAccumBuffer );
 
 			// launch the kernel
-			mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, kernel );
+			{
+				size_t local_work_size = 64;
+				size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
+				mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, kernel );
+			}
+		}
+
+		void ShadeMiss( int32 pass )
+		{
+			CLWKernel missKernel = mProgram.GetKernel( "ShadeMiss" );
+
+			int32 numRays = mScreenHeight * mScreenWidth;
+
+			int32 arg = 0;
+			missKernel.SetArg( arg++, mRayBuffer[pass & 0x1] );
+			missKernel.SetArg( arg++, mIntersections );
+			missKernel.SetArg( arg++, mPixelIndices[( pass + 1 ) & 0x1] );
+			missKernel.SetArg( arg++, numRays );
+			missKernel.SetArg( arg++, 0 );
+			missKernel.SetArg( arg++, 0 );
+			missKernel.SetArg( arg++, 0 );
+			missKernel.SetArg( arg++, mPathBuffer );
+			missKernel.SetArg( arg++, 0 );
+			missKernel.SetArg( arg++, mAccumBuffer );
+
+			// launch the kernel
+			/*{
+				size_t local_work_size = 64;
+				size_t global_work_size = ( ( mScreenHeight*mScreenWidth + local_work_size - 1 ) / local_work_size ) * local_work_size;
+				mOpenCLContext.Launch1D( 0, global_work_size, local_work_size, missKernel );
+			}*/
 		}
 
 		void Accumulate(  )
@@ -466,7 +645,7 @@ namespace PetTracer
 			frames++;
 			if ( dt > 2000L )
 			{
-				std::string title = mTitle + " - " + std::to_string( frames / 2.0f ) + " sps";
+				std::string title = mTitle + " - " + std::to_string( frames / 2.0f ) + " sps  -  Sample: " + std::to_string(mIteration);
 				SDL_SetWindowTitle( mWindow, title.c_str() );
 				frames = 0;
 				lastTime = currentTime;
@@ -495,8 +674,14 @@ namespace PetTracer
 		CLWBuffer<float3>					mAccumBuffer;
 		
 		CLWBuffer<CLTypes::Path>			mPathBuffer;
-		CLWBuffer<int>						mHitCount[2];
+		CLWBuffer<int32>					mHitCount;
+		CLWBuffer<int32>					mHits;
+		CLWBuffer<int32>					mIota;
+		CLWBuffer<int32>					mPixelIndices[2];
+		CLWBuffer<int32>					mCompactedIndices;
 		CLWBuffer<uint32>					mRNGState;
+
+
 
 		CLWBuffer<float4>					mVertexBufferGL;
 		//cl::BufferGL	mVertexBufferGL;
@@ -520,7 +705,7 @@ namespace PetTracer
 
 int main( int argc, char* argv[] )
 {
-	PetTracer::PathTracer renderer("OpenCL Path Tracer", 500, 500);
+	PetTracer::PathTracer renderer("OpenCL Path Tracer", 800, 600);
 	renderer.Start();
 	return 0;
 }

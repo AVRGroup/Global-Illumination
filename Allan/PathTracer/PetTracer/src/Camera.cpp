@@ -69,6 +69,17 @@ namespace PetTracer
 		return float2( mZCap.x, mZCap.y );
 	}
 
+	void Camera::SetPosition( float3 position )
+	{
+		mPosition = position;
+		SetDirty();
+	}
+
+	float3 Camera::GetPosition() const
+	{
+		return mPosition;
+	}
+
 	void Camera::Rotate( float angle )
 	{
 		Rotate( float3( 0.0f, 1.0f, 0.0f ), angle );

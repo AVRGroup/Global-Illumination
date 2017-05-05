@@ -33,7 +33,7 @@ namespace PetTracer
 		CLWBuffer<int3>&	 TriangleIndexBuffer()		{ return mTrianglesIndexes.CLBuffer(); }
 		CLWBuffer<float3>&	 VerticesPositionBuffer()	{ return mVerticesPosition.CLBuffer(); }
 		CLWBuffer<float3>&	 VerticesNormalBuffer()		{ return mVerticesNormal.CLBuffer(); }
-		CLWBuffer<float3>&	 VerticesTexCoordBuffer()	{ return mVerticesTexCoord.CLBuffer(); }
+		CLWBuffer<float2>&	 VerticesTexCoordBuffer()	{ return mVerticesTexCoord.CLBuffer(); }
 		CLWBuffer<Material>& MaterialListBuffer()		{ return mMaterialList.CLBuffer(); }
 		CLWBuffer<AABB>&	 BVHNodeBuffer()			{ return mBVHNodes.CLBuffer(); }
 
@@ -49,7 +49,7 @@ namespace PetTracer
 		Buffer<int4>	 mTrianglesIndexes;
 		Buffer<float4>	 mVerticesPosition;
 		Buffer<float4>	 mVerticesNormal;
-		Buffer<float4>	 mVerticesTexCoord;
+		Buffer<float2>	 mVerticesTexCoord;
 		Buffer<Material> mMaterialList;
 		Buffer<AABB>	 mBVHNodes;
 

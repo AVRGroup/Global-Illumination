@@ -18,12 +18,12 @@ typedef enum _pathFlags
 	kSpecularBounce = 0x4
 } PathFlags;
 
-bool Path_IsScattered(__global Path const* path)
+bool Path_IsScattered( __global Path const* path)
 {
 	return (path->flags & kScattered);
 }
 
-bool Path_IsSpecular(__global Path const* path)
+bool Path_IsSpecular( __global Path const* path)
 {
 	return (path->flags & kSpecularBounce);
 }
@@ -58,12 +58,12 @@ void Path_Restart(__global Path* path)
 	path->flags = 0;
 }
 
-int Path_GetVolumeIndex(__global Path const* path)
+int Path_GetVolumeIndex( __global Path const* path)
 {
 	return path->volume;
 }
 
-float3 Path_GetThroughput(__global Path const* path)
+float3 Path_GetThroughput( __global Path const* path)
 {
 	float3 t = path->throughput;
 	return t;
@@ -79,7 +79,7 @@ void Path_Kill(__global Path* path)
 	path->flags |= kKilled;
 }
 
-void Path_AddContribution(__global Path* path, __global float3* output, int index, float3 val)
+void Path_AddContribution( const __global Path* path, __global float3* output, int index, float3 val)
 {
 	output[index] += Path_GetThroughput(path) * val;
 }

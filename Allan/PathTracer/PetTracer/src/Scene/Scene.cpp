@@ -86,7 +86,7 @@ namespace PetTracer
 			{
 				int4*	triIdx = mTrianglesIndexes.GetPointer();
 				float4* vtxPos = mVerticesPosition.GetPointer();
-				float4* vtxTex = mVerticesTexCoord.GetPointer();
+				float2* vtxTex = mVerticesTexCoord.GetPointer();
 				float4* vtxNor = mVerticesNormal.GetPointer();
 				uint32  vtxOff = 0;
 				uint32  idxOff = 0;
@@ -100,12 +100,14 @@ namespace PetTracer
 					uint32 idxCount = (uint32) mesh.indices.size() / 3;
 					bool hasTexCor = mesh.texcoords.size() != 0;
 					bool hasNormal = mesh.normals.size() != 0;
+					if ( hasNormal ) std::cout << "Has normals" << std::endl;
+					if ( hasTexCor ) std::cout << "Has texcoord" << std::endl;
 					
 					for ( uint32 i = 0; i < vtxCount; i++ )
 					{
 						vtxPos[i + vtxOff] = float4( mesh.positions[i * 3], mesh.positions[i * 3 + 1], mesh.positions[i * 3 + 2] );
-						//if( hasTexCor )	vtxTex[i + vtxOff] = float4( mesh.texcoords[i * 3], mesh.texcoords[i * 3 + 1], mesh.texcoords[i * 3 + 2] );
-						//if( hasNormal ) vtxNor[i + vtxOff] = float4( mesh.normals  [i * 3], mesh.normals  [i * 3 + 1], mesh.normals  [i * 3 + 2] );
+						if( hasTexCor )	vtxTex[i + vtxOff] = float2( mesh.texcoords[i * 2], mesh.texcoords[i * 2 + 1]/*, mesh.texcoords[i * 3 + 2]*/ );
+						if( hasNormal ) vtxNor[i + vtxOff] = float4( mesh.normals  [i * 3], mesh.normals  [i * 3 + 1], mesh.normals  [i * 3 + 2] );
 					}
 
 					for ( uint32 i = 0; i < idxCount; i++ )
@@ -147,8 +149,8 @@ namespace PetTracer
 					Material& nMaterial =materialList[materialID];
 					nMaterial.albedo = { baseColor.x, baseColor.y, baseColor.z };
 					nMaterial.emissive = { mat.emission[0], mat.emission[1], mat.emission[2] };
-					nMaterial.roughness = mat.shininess / 1000.0f;
-					nMaterial.metallic = metallic;
+					nMaterial.roughness = 1.0f;//mat.shininess / 1000.0f;
+					nMaterial.metallic = 0.2f;// metallic;
 
 					materialID++;
 				}

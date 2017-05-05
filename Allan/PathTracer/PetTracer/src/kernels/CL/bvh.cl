@@ -37,9 +37,8 @@ void IntersectLeafClosest(
 
 	if( IntersectTriangle(r, v1, v2, v3, inter) )
 	{
-		inter->primID = start;
-		inter->shapeID = face.w;
-		inter->uvwt.xyz = normalize( cross(v2 - v1, v3 - v1) );
+		inter->primID  = start;
+		inter->shapeID =  face.w;
 	}
 }
 
@@ -59,8 +58,6 @@ void IntersectSceneClosest(SceneData const* scenedata, Ray const* r, Intersectio
 		// If hits the AABB, check the childs
 		if ( IntersectBox( r, invDir, node, inter->uvwt.w ) )
 		{
-			// Debug
-			//inter->uvwt.x += 0.01f;
 			// If its a leaf, intersect its triangles
 			if ( LEAFNODE( node ) )
 			{

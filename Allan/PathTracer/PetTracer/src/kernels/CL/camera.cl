@@ -39,7 +39,8 @@ void PerspectiveCamera_GeneratePaths(
 	// RNG seed
 	int rngSeed,
 	// Sampler data
-	__global Rng* rngs,
+	__global uint* random,
+	int frame,
 	// Ouput
 	__global Ray* rays,
 	__global Path* paths
@@ -58,16 +59,23 @@ void PerspectiveCamera_GeneratePaths(
 		__global Path* mPath = paths + gID;
 
 		// Prepare RNG
-		Rng rng;
-		InitRng(rngSeed + globalID.x * 157 + 10433 * globalID.y, &rng);
+		Sampler sampler;
+#if SAMPLER == RANDOM
+		uint scramble = pixelID * rngSeed;
+		Sampler_Init( &sampler, scramble );
+#elif SAMPLER == CMJ
+		uint rnd = random[gID];
+		uint scramble = rnd * 0x1fe3434f * ( ( frame + 133 * rnd ) / ( CMJ_DIM * CMJ_DIM ) );
+		Sampler_Init( &sampler, frame % ( CMJ_DIM * CMJ_DIM ), SAMPLE_DIM_CAMERA_OFFSET, scramble );
+#endif
 
 		// Need to create a proper sampler
-		float2 sample0 = ( float2 )( RandFloat( &rng ), RandFloat( &rng ) );
+		float2 sample0 = Sampler_Sample2D( &sampler );
 
 		// Calculate [0...1] image plane sample
 		float2 imgSample;
-		imgSample.x = ( float ) (globalID.x + 0.0001f) / imgWidth; //+sample0.x / imgWidth; /* Sum random offset for antialias */
-		imgSample.y = ( float ) (globalID.y + 0.0001f) / imgHeight;// +sample0.y / imgHeight;
+		imgSample.x = ( float ) (globalID.x + 0.0001f) / imgWidth + sample0.x / imgWidth; /* Sum random offset for antialias */
+		imgSample.y = ( float ) (globalID.y + 0.0001f) / imgHeight + sample0.y / imgHeight;
 
 		// Transform into [-0.5...+0.5] space
 		float2 hSample = imgSample - (float2)(0.5f, 0.5f);
@@ -83,7 +91,9 @@ void PerspectiveCamera_GeneratePaths(
 		mRay->o.w = camera->zcap.y - camera->zcap.x;
 		// Generate random time form [0...1]
 		mRay->d.w = sample0.x;
-		Ray_SetPixel(mRay, gID);
+		mRay->extra.x = 0xFFFFFFFF;
+		mRay->extra.y = 0xFFFFFFFF;
+		mRay->padding = 1.0f;
 
 		// Initialize path data
 		mPath->throughput = (float3)(1.0f, 1.0f, 1.0f);
@@ -91,7 +101,7 @@ void PerspectiveCamera_GeneratePaths(
 		mPath->flags = 0;
 		mPath->active = 0xFF;
 
-		rngs[gID] = rng;
+		//rngs[gID] = rng;
 	}
 }
 

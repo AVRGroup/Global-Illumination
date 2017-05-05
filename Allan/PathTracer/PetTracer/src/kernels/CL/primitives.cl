@@ -104,7 +104,7 @@ int IntersectTriangle( Ray const* r, float3 v1, float3 v2, float3 v3, Intersecti
 	}
 	else
 	{
-		isect->uvwt = makeFloat4( isect->uvwt.x, b2, 0.f, temp );
+		isect->uvwt = makeFloat4( b1, b2, 0.f, temp );
 		return 1;
 	}
 }
