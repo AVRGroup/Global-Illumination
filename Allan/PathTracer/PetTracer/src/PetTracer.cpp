@@ -260,12 +260,8 @@ namespace PetTracer
 			mKIntersectScene.SetArg( 1, mScene->TriangleIndexBuffer() );
 			mKIntersectScene.SetArg( 2, mScene->BVHNodeBuffer() );
 			mKIntersectScene.SetArg( 3, mRayBuffer[0] );
-			mKIntersectScene.SetArg( 4, mScreenHeight*mScreenWidth );
+			mKIntersectScene.SetArg( 4, mHitCount );
 			mKIntersectScene.SetArg( 5, mIntersections );
-			mKIntersectScene.SetArg( 6, mVertexBufferGL );
-			mKIntersectScene.SetArg( 7, mScreenWidth );
-			mKIntersectScene.SetArg( 8, mScreenHeight );
-			mKIntersectScene.SetArg( 9, mHitCount );
 		}
 
 		void RunKernel()
@@ -302,10 +298,6 @@ namespace PetTracer
 
 				// Compact rays
 				mPP.Compact( 0, mHits, mIota, mCompactedIndices, mHitCount );
-
-				/*int cnt = 0;
-				mOpenCLContext.ReadBuffer(0, mHitCount, &cnt, 1).Wait();
-				std::cout << "Pass " << pass << " Alive " << cnt << "\n";*/
 
 				// Advance indices to keep pixel indices up to date
 				RestorePixelIndices( pass );

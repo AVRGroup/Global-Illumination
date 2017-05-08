@@ -58,9 +58,9 @@ void DifferentialGeometry_Fill(
 	float2 uv2 = scene->uvs[Idx.z];
 
 	// Calculate barycentric position and normal
-	diffgeo->n = normalize( ( 1.f - uv.x - uv.y ) * n0 + uv.x * n1 + uv.y * n2 );
-	diffgeo->p = ( 1.f - uv.x - uv.y ) * v0 + uv.x * v1 + uv.y * v2 ;
-	diffgeo->uv = ( 1.f - uv.x - uv.y ) * uv0 + uv.x * uv1 + uv.y * uv2;
+	diffgeo->n = normalize( ( 1.0f - uv.x - uv.y ) * n0 + uv.x * n1 + uv.y * n2 );
+	diffgeo->p  = ( 1.0f - uv.x - uv.y ) *  v0 + uv.x *  v1 + uv.y * v2 ;
+	diffgeo->uv = ( 1.0f - uv.x - uv.y ) * uv0 + uv.x * uv1 + uv.y * uv2;
 
 	float3 ng = cross( v1 - v0, v2 - v0 );
 	diffgeo->area = 0.5f * length( ng );
@@ -72,29 +72,19 @@ void DifferentialGeometry_Fill(
 	// Get material at shading point
 	diffgeo->mat = scene->materials[shapeID];
 
-	/// From PBRT book
-	float du1 = uv0.x - uv2.x;
-	float du2 = uv1.x - uv2.x;
-	float dv1 = uv0.y - uv2.y;
-	float dv2 = uv1.y - uv2.y;
-
-	float3 dp1 = v0 - v2;
-	float3 dp2 = v1 - v2;
-
-	float det = du1 * dv2 - dv1 * du2;
-
-	if ( 0 && det != 0.f )
-	{
-		float invdet = 1.f / det;
-		diffgeo->dpdu = normalize( ( dv2 * dp1 - dv1 * dp2 ) * invdet );
-		diffgeo->dpdv = normalize( ( -du2 * dp1 + du1 * dp2 ) * invdet );
-	}
-	else
-	{
-		diffgeo->dpdu = normalize( GetOrthoVector( diffgeo->n ) );
-		diffgeo->dpdv = normalize( cross( diffgeo->n, diffgeo->dpdu ) );
-	}
+	diffgeo->dpdu = GetOrthoVector( diffgeo->n );
+	diffgeo->dpdv = cross( diffgeo->n, diffgeo->dpdu );
 	
+}
+
+INLINE void DifferentialGeometry_CalculateTangentTransforms(DifferentialGeometry* diffgeo)
+{
+	diffgeo->worldToTangent = matrixFromRows3(diffgeo->dpdu, diffgeo->n, diffgeo->dpdv);
+
+	diffgeo->tangentToWorld = matrixFromCols3(diffgeo->worldToTangent.m0.xyz,
+		diffgeo->worldToTangent.m1.xyz, diffgeo->worldToTangent.m2.xyz);
+
+
 }
 
 float3 DifferentialGeometry_ToTangentSpace(

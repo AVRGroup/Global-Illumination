@@ -61,7 +61,7 @@ void PerspectiveCamera_GeneratePaths(
 		// Prepare RNG
 		Sampler sampler;
 #if SAMPLER == RANDOM
-		uint scramble = pixelID * rngSeed;
+		uint scramble = gID * rngSeed;
 		Sampler_Init( &sampler, scramble );
 #elif SAMPLER == CMJ
 		uint rnd = random[gID];

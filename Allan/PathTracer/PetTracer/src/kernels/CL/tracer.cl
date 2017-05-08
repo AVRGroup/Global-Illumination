@@ -19,28 +19,6 @@ void IntersectScene( SceneData const* scenedata, Ray* r, Intersection* isect )
 	IntersectSceneClosest( scenedata, r, isect );
 }
 
-float3 getHeatMapColor( float value )
-{
-	const float3 color[4] = { makeFloat3( 0,0,1 ), makeFloat3( 0,1,0 ), makeFloat3( 1,1,0 ), makeFloat3( 1,0,0 ) };
-	// A static array of 4 colors:  (blue,   green,  yellow,  red) using {r,g,b} for each.
-
-	int idx1;        // |-- Our desired color will be between these two indexes in "color".
-	int idx2;        // |
-	float fractBetween = 0;  // Fraction between "idx1" and "idx2" where our value is.
-
-	if ( value <= 0 ) { idx1 = idx2 = 0; }    // accounts for an input <=0
-	else if ( value >= 1 ) { idx1 = idx2 = 4 - 1; }    // accounts for an input >=0
-	else
-	{
-		value = value * ( 4 - 1 );        // Will multiply value by 3.
-		idx1  = floor( value );                  // Our desired color will be after this index.
-		idx2  = idx1 + 1;                        // ... and before this index (inclusive).
-		fractBetween = value - (float)( idx1 );    // Distance between the two indexes (0-1).
-	}
-
-	return ( color[idx2] - color[idx1] )*fractBetween + color[idx1];
-}
-
 
 __attribute__( ( reqd_work_group_size( 64, 1, 1 ) ) )
 __kernel void IntersectClosest(
@@ -52,11 +30,7 @@ __kernel void IntersectClosest(
 				__global Ray*	 rays,			//3
 				__global int*	 numRays,		//4
 				// Ray hit output
-				__global Intersection* hits,	//5
-				// Debug output
-				__global float3* output,		//6
-				unsigned int width,				//7
-				unsigned int height			    //8
+				__global Intersection* hits		//5
 				)
 {
 	int globalID = get_global_id( 0 );
@@ -231,7 +205,7 @@ __kernel void ShadeMiss(
 			if(volID == -1)
 			{
 				//Apply the enviroment map
-				output[pixelID].xyzw += makeFloat4( 0.1f, 0.125f, 0.137f, 1.0f );
+				//output[pixelID].xyzw += makeFloat4( 0.1f, 0.125f, 0.137f, 1.0f );
 			}
 			else
 			{
@@ -432,7 +406,7 @@ __kernel void ShadeSurface(
 					weight = BalanceHeuristic( 1, extra.x, 1, bxdflightpdf );
 				}
 
-				output[pixelID] += throughput * 100 * diffgeo.mat.emissive.xyz * weight;
+				output[pixelID] += throughput * diffgeo.mat.emissive.xyz*100 * weight;
 			}
 			Path_Kill( path );
 			Ray_SetInactive( indirectRays + globalID );
@@ -450,18 +424,21 @@ __kernel void ShadeSurface(
 			s = -s;
 		}
 
+		DifferentialGeometry_CalculateTangentTransforms(&diffgeo);
+
 		//float ndotwi = fabs( dot( diffgeo.n, wi ) );
 
 		float2 bxdfSampler = Sampler_Sample2D( &sampler );
 		float3 bxdfwo;
 		float bxdfpdf;
+		float3 wo;
 		float3 bxdf = Bxdf_Sample( &diffgeo, wi, bxdfSampler, &bxdfwo, &bxdfpdf );
 
 
 		// Apply Russian roulette
-		float q = max( min( 0.5f,
-			// Luminance
-			0.2126f * throughput.x + 0.7152f * throughput.y + 0.0722f * throughput.z ), 0.01f );
+		float q = max(min(0.5f,
+            // Luminance
+            0.2126f * throughput.x + 0.7152f * throughput.y + 0.0722f * throughput.z), 0.01f);
 		// Only apply if is 3+ bounces
 		bool rrApply = bounce > 3;
 		bool rrStop = Sampler_Sample1D( &sampler ) > q && rrApply;
@@ -474,20 +451,11 @@ __kernel void ShadeSurface(
 
 		bxdfwo = normalize( bxdfwo );
 		float3 t = bxdf * fabs( dot( diffgeo.n, bxdfwo ) );
-		/*if ( true )
-		{
-			float2 sample = Sampler_Sample2D( &sampler );
-			float rand1 = 2.0f * PI * sample.x;
-			float rand2 = sample.y;
-			float rand2s = sqrt( rand2 );
-
-			newDir = normalize( diffgeo.dpdu * cos( rand1 )*rand2s + diffgeo.dpdv*sin( rand1 )*rand2s + diffgeo.n*sqrt( 1.0f - rand2 ) );
-		}*/
 
 		// Only continue if we have non-zero throughput & pdf
-		if( NON_ZERO(t) && bxdfpdf > 0.0f && !rrStop )
+		if( NON_ZERO(t) && bxdfpdf > 0.001f && !rrStop )
 		{
-			Path_MulThroughput( path, t / bxdfpdf /*diffgeo.mat.albedo.xyz * dot( newDir, diffgeo.n )*/ );
+			Path_MulThroughput( path, t / bxdfpdf );
 
 			float3 indirectRayOrigin = diffgeo.p + 0.001f * s *diffgeo.ng;
 
